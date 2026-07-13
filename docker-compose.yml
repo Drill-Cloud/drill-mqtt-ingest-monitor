@@ -1,0 +1,26 @@
+services:
+  mqtt-monitor:
+    container_name: container-mqtt-monitor${branch:+-${branch}}
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HTTP_PORT: 3205
+      MQTT_URL: ${MQTT_URL}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      IMPORTANT_TOPICS: ${IMPORTANT_TOPICS:-data/edge5/video/v2/+,data/edge5/modbus/v3}
+      TOPIC_STALE_MS: ${TOPIC_STALE_MS:-15000}
+      TOPIC_DEAD_MS: ${TOPIC_DEAD_MS:-45000}
+      MATRIX_ENABLED: ${MATRIX_ENABLED:-false}
+      MATRIX_HOMESERVER: ${MATRIX_HOMESERVER:-https://matrix.greact.online}
+      MATRIX_ROOM_ID: ${MATRIX_ROOM_ID:-}
+      MATRIX_ACCESS_TOKEN: ${MATRIX_ACCESS_TOKEN:-}
+    expose:
+      - "3205"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
