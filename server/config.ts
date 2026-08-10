@@ -7,6 +7,7 @@ export type AppConfig = {
   importantTopicExpectations: Record<string, ImportantTopicExpectation>;
   staleMs: number;
   deadMs: number;
+  activityLogIntervalMs: number;
   matrixEnabled: boolean;
   matrixHomeserver: string;
   matrixRoomId: string;
@@ -64,6 +65,7 @@ export function readConfig(): AppConfig {
     },
     staleMs: readNumber('TOPIC_STALE_MS', 15_000),
     deadMs: readNumber('TOPIC_DEAD_MS', 45_000),
+    activityLogIntervalMs: readNumber('ACTIVITY_LOG_INTERVAL_MS', 60_000),
     matrixEnabled: process.env.MATRIX_ENABLED === 'true',
     matrixHomeserver: process.env.MATRIX_HOMESERVER ?? 'https://matrix.greact.online',
     matrixRoomId: process.env.MATRIX_ROOM_ID ?? '',

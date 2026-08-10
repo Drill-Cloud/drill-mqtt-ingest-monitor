@@ -6,6 +6,8 @@ import { getPayloadPreview, getPayloadText, getTopicState, hasWildcard, topicMat
 import type { AlertEvent, MonitorSnapshot, TopicMessage, TopicState, TopicStatus } from './types.js';
 
 const MAX_MESSAGES_PER_TOPIC = 100;
+const MQTT_SUBSCRIPTIONS = ['#', '$SYS/#'];
+const REPEATED_ERROR_LOG_INTERVAL_MS = 60_000;
 
 type TopicRecord = {
   topic: string;
@@ -32,13 +34,27 @@ export class MqttMonitor extends EventEmitter {
   private readonly alerts: AlertEvent[] = [];
   private readonly notifier: MatrixNotifier;
   private interval: NodeJS.Timeout | null = null;
+  private reconnectAttempts = 0;
+  private stopping = false;
+  private lastErrorMessage = '';
+  private lastErrorLoggedAt = 0;
+  private applicationMessages = 0;
+  private applicationBytes = 0;
+  private systemMessages = 0;
+  private systemBytes = 0;
+  private readonly applicationTopics = new Set<string>();
+  private readonly systemTopics = new Set<string>();
+  private nextActivityLogAt: number;
 
   constructor(private readonly config: AppConfig) {
     super();
     this.notifier = new MatrixNotifier(config);
+    this.nextActivityLogAt = Date.now() + config.activityLogIntervalMs;
   }
 
   start(): void {
+    this.stopping = false;
+    this.log('info', 'mqtt.connecting', { broker: this.publicBrokerUrl() });
     this.client = mqtt.connect(this.config.mqttUrl, {
       username: this.config.mqttUsername,
       password: this.config.mqttPassword,
@@ -48,21 +64,44 @@ export class MqttMonitor extends EventEmitter {
 
     this.client.on('connect', () => {
       this.connected = true;
-      this.client?.subscribe('#', (error) => {
+      this.reconnectAttempts = 0;
+      this.log('info', 'mqtt.connected', { broker: this.publicBrokerUrl() });
+      this.client?.subscribe(MQTT_SUBSCRIPTIONS, (error, granted) => {
         if (error) {
-          console.error('mqtt.subscribe_error', error);
+          this.log('error', 'mqtt.subscribe_failed', { error: error.message });
+          return;
         }
+
+        this.log('info', 'mqtt.subscribed', {
+          subscriptions: (granted ?? []).map(({ topic, qos }) => ({ topic, qos })),
+        });
       });
       this.emitUpdate();
     });
 
     this.client.on('close', () => {
+      const wasConnected = this.connected;
       this.connected = false;
+      if (wasConnected && !this.stopping) {
+        this.log('warn', 'mqtt.disconnected');
+      }
       this.emitUpdate();
     });
 
+    this.client.on('reconnect', () => {
+      this.reconnectAttempts += 1;
+      if (this.reconnectAttempts === 1 || this.reconnectAttempts % 10 === 0) {
+        this.log('warn', 'mqtt.reconnecting', { attempt: this.reconnectAttempts });
+      }
+    });
+
     this.client.on('error', (error) => {
-      console.error('mqtt.error', error);
+      const now = Date.now();
+      if (error.message !== this.lastErrorMessage || now - this.lastErrorLoggedAt >= REPEATED_ERROR_LOG_INTERVAL_MS) {
+        this.lastErrorMessage = error.message;
+        this.lastErrorLoggedAt = now;
+        this.log('error', 'mqtt.error', { error: error.message });
+      }
       this.emitUpdate();
     });
 
@@ -72,6 +111,7 @@ export class MqttMonitor extends EventEmitter {
 
     this.interval = setInterval(() => {
       void this.checkImportantTopics();
+      this.logActivityIfDue();
       this.emitUpdate();
     }, 1_000);
   }
@@ -82,8 +122,10 @@ export class MqttMonitor extends EventEmitter {
       this.interval = null;
     }
 
+    this.stopping = true;
     this.client?.end(true);
     this.client = null;
+    this.log('info', 'mqtt.monitor_stopped');
   }
 
   getSnapshot(): MonitorSnapshot {
@@ -129,7 +171,8 @@ export class MqttMonitor extends EventEmitter {
 
   private recordMessage(topic: string, payload: Buffer): void {
     const now = Date.now();
-    const record = this.topics.get(topic) ?? {
+    const existingRecord = this.topics.get(topic);
+    const record = existingRecord ?? {
       topic,
       messageCount: 0,
       bytesTotal: 0,
@@ -140,6 +183,20 @@ export class MqttMonitor extends EventEmitter {
     };
     const payloadPreview = getPayloadPreview(payload);
     const payloadText = getPayloadText(payload);
+
+    const isSystemTopic = topic.startsWith('$SYS/');
+    if (isSystemTopic) {
+      this.systemMessages += 1;
+      this.systemBytes += payload.byteLength;
+      this.systemTopics.add(topic);
+    } else {
+      this.applicationMessages += 1;
+      this.applicationBytes += payload.byteLength;
+      this.applicationTopics.add(topic);
+    }
+    if (!existingRecord && !isSystemTopic) {
+      this.log('info', 'mqtt.topic_first_seen', { topic });
+    }
 
     record.messageCount += 1;
     record.bytesTotal += payload.byteLength;
@@ -308,5 +365,53 @@ export class MqttMonitor extends EventEmitter {
 
   private emitUpdate(): void {
     this.emit('update', this.getSnapshot());
+  }
+
+  private logActivityIfDue(): void {
+    const now = Date.now();
+    if (now < this.nextActivityLogAt) {
+      return;
+    }
+
+    this.log('info', 'mqtt.activity', {
+      connected: this.connected,
+      applicationMessages: this.applicationMessages,
+      applicationBytes: this.applicationBytes,
+      activeApplicationTopics: this.applicationTopics.size,
+      systemMessages: this.systemMessages,
+      systemBytes: this.systemBytes,
+      activeSystemTopics: this.systemTopics.size,
+      knownTopics: this.topics.size,
+      intervalMs: this.config.activityLogIntervalMs,
+    });
+    this.applicationMessages = 0;
+    this.applicationBytes = 0;
+    this.systemMessages = 0;
+    this.systemBytes = 0;
+    this.applicationTopics.clear();
+    this.systemTopics.clear();
+    this.nextActivityLogAt = now + this.config.activityLogIntervalMs;
+  }
+
+  private publicBrokerUrl(): string {
+    try {
+      const url = new URL(this.config.mqttUrl);
+      url.username = '';
+      url.password = '';
+      return url.toString();
+    } catch {
+      return '<invalid MQTT URL>';
+    }
+  }
+
+  private log(level: 'info' | 'warn' | 'error', event: string, details: Record<string, unknown> = {}): void {
+    const line = JSON.stringify({ timestamp: new Date().toISOString(), level, event, ...details });
+    if (level === 'error') {
+      console.error(line);
+    } else if (level === 'warn') {
+      console.warn(line);
+    } else {
+      console.info(line);
+    }
   }
 }

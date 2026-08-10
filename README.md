@@ -60,6 +60,7 @@ EDGE5_MODBUS_EXPECTED_TAGS=7
 EDGE5_VIDEO_EXPECTED_CAMERAS=3
 TOPIC_STALE_MS=15000
 TOPIC_DEAD_MS=45000
+ACTIVITY_LOG_INTERVAL_MS=60000
 
 MATRIX_ENABLED=false
 MATRIX_HOMESERVER=https://matrix.greact.online
@@ -83,6 +84,84 @@ IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3,data/edge5/custom/+
 В UI можно быстро добавить важный топик без редеплоя. Это удобно для проверки, но после перезапуска монитора такой топик нужно будет добавить снова или перенести в `.env`.
 
 Не фиксируйте IP брокера в production-конфигурации. Например, ошибочное значение `mqtt://83.23.97.7:1883` приведёт к статусу «оффлайн», даже когда `drillcloud.ru:1883` доступен. После изменения `MQTT_URL` стек нужно пересоздать, чтобы контейнер получил новое окружение.
+
+## Логи и наблюдаемость
+
+Монитор пишет структурированные JSON-события в `stdout`, поэтому они видны во вкладке **Logs** контейнера в Portainer:
+
+- `mqtt.connecting`, `mqtt.connected`, `mqtt.disconnected`;
+- `mqtt.reconnecting` — первая и затем каждая десятая попытка, без засорения логов;
+- `mqtt.subscribe_failed`, `mqtt.subscribed` — результат подписки на `#` и `$SYS/#`;
+- `mqtt.topic_first_seen` — первое сообщение нового топика;
+- `mqtt.activity` — минутная сводка: сообщения, байты и активные топики отдельно для application и `$SYS` traffic;
+- `mqtt.error` — ошибка подключения, повторяющаяся ошибка выводится не чаще раза в минуту.
+
+Payload сообщений в stdout не пишется: это защищает секретные данные и не заполняет диск бинарными видеопакетами. Период сводки задаётся через `ACTIVITY_LOG_INTERVAL_MS`.
+
+Обычная MQTT-подписка `#` не включает служебную иерархию `$SYS`. Поэтому монитор подписывается на неё отдельно и получает broker-метрики: число клиентов, сообщения, байты, dropped publish и очереди.
+
+### Подключение контейнеров в Portainer
+
+Если Mosquitto и монитор находятся в одной Docker-сети, предпочтительно обращаться к брокеру по имени его Compose-сервиса:
+
+```env
+MQTT_URL=mqtt://mosquitto:1883
+```
+
+Здесь `mosquitto` нужно заменить на настоящее имя сервиса брокера. Оба сервиса должны быть подключены к одной external-сети, например `proxy`. Публиковать порт `1883` наружу для связи контейнеров не требуется — достаточно `expose`/listener внутри сети.
+
+Если контейнеры находятся на разных серверах или в разных сетях, используется внешний DNS:
+
+```env
+MQTT_URL=mqtt://drillcloud.ru:1883
+```
+
+После изменения переменной стек монитора нужно пересоздать. В production snapshot должны одновременно выполняться условия: `mqttUrl` содержит правильный адрес, `connected=true`, а `topics` начинает расти после публикаций.
+
+### Рекомендуемая конфигурация Mosquitto
+
+В `mosquitto.conf` самого брокера:
+
+```conf
+listener 1883
+
+log_dest stdout
+log_timestamp true
+log_timestamp_format %Y-%m-%dT%H:%M:%S
+connection_messages true
+log_type error
+log_type warning
+log_type notice
+log_type information
+log_type subscribe
+log_type unsubscribe
+
+sys_interval 10
+```
+
+Не включайте `log_type all` или `debug` постоянно в production: эти режимы нужны только для короткой диагностики и создают слишком много записей. Broker-логи должны показывать подключения, ошибки и подписки; контроль потока данных выполняется через `$SYS` и агрегаты самого монитора.
+
+Для монитора рекомендуется отдельная read-only учётная запись. Ей нужны права чтения прикладных топиков и `$SYS/#`, но не право публикации:
+
+```conf
+user mqtt-monitor
+topic read #
+topic read $SYS/#
+```
+
+Если используются Dynamic Security ACL, эквивалентные разрешения задаются для `subscribe` и `publishClientReceive`. Логин и пароль передаются монитору через `MQTT_USERNAME` и `MQTT_PASSWORD` в Portainer secrets/environment.
+
+### Проверка цепочки
+
+Из контейнера в той же Docker-сети последовательно проверить:
+
+```bash
+mosquitto_sub -h mosquitto -p 1883 -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" \
+  -t '$SYS/#' -t 'data/edge5/modbus/v3' -t 'data/edge5/video/v2/+' \
+  -F '@Y-@m-@dT@H:@M:@S : %t : %l bytes'
+```
+
+Если `$SYS` приходит, а `data/edge5/...` нет — брокер и ACL работают, проблема находится на стороне publisher/Node-RED либо выбран не тот broker. Если не приходит даже `$SYS`, нужно проверять адрес, сеть, listener, логин и ACL.
 
 ## Matrix
 
