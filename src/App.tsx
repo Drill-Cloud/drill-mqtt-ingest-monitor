@@ -56,12 +56,12 @@ export function App() {
 
   const stats = useMemo(() => {
     const topics = snapshot?.topics ?? [];
-    const important = snapshot?.important ?? [];
+    const important = (snapshot?.important ?? []).filter((topic) => topic.isExpectation);
 
     return {
       topics: topics.length,
       importantAlive: important.filter((topic) => topic.state === 'alive').length,
-      importantDead: important.filter((topic) => topic.state === 'dead').length,
+      importantProblems: important.filter((topic) => topic.state !== 'alive').length,
       rate: topics.reduce((sum, topic) => sum + topic.ratePerMinute, 0),
     };
   }, [snapshot]);
@@ -140,7 +140,11 @@ export function App() {
         <section className="status-grid">
           <StatCard label="Всего топиков" value={stats.topics} />
           <StatCard label="Важные живые" value={stats.importantAlive} tone="good" />
-          <StatCard label="Важные мертвые" value={stats.importantDead} tone={stats.importantDead > 0 ? 'bad' : 'good'} />
+          <StatCard
+            label="Важные с проблемой"
+            value={stats.importantProblems}
+            tone={stats.importantProblems > 0 ? 'bad' : 'good'}
+          />
           <StatCard label="Сообщений/мин" value={stats.rate} />
           <StatCard label="Аптайм" value={formatUptime(snapshot.startedAt, snapshot.now)} />
         </section>

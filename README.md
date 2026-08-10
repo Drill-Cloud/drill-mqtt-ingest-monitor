@@ -56,6 +56,8 @@ MQTT_USERNAME=
 MQTT_PASSWORD=
 
 IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3
+EDGE5_MODBUS_EXPECTED_TAGS=7
+EDGE5_VIDEO_EXPECTED_CAMERAS=3
 TOPIC_STALE_MS=15000
 TOPIC_DEAD_MS=45000
 
@@ -70,6 +72,13 @@ MATRIX_ACCESS_TOKEN=
 ```env
 IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3,data/edge5/custom/+
 ```
+
+Для production-потоков монитор также проверяет ожидаемый состав:
+
+- `data/edge5/modbus/v3` — данные для 7 тегов;
+- `data/edge5/video/v2/+` — 3 одновременно живые камеры.
+
+В разделе «Важные потоки» отображается покрытие, например `0 из 7 тегов` или `2 из 3 камер`. Поток без данных и неполный набор камер подсвечиваются красным и попадают в счётчик «Важные с проблемой». Ожидаемые количества задаются через `EDGE5_MODBUS_EXPECTED_TAGS` и `EDGE5_VIDEO_EXPECTED_CAMERAS`.
 
 В UI можно быстро добавить важный топик без редеплоя. Это удобно для проверки, но после перезапуска монитора такой топик нужно будет добавить снова или перенести в `.env`.
 

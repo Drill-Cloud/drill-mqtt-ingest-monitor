@@ -4,12 +4,18 @@ export type AppConfig = {
   mqttUsername?: string;
   mqttPassword?: string;
   importantTopics: string[];
+  importantTopicExpectations: Record<string, ImportantTopicExpectation>;
   staleMs: number;
   deadMs: number;
   matrixEnabled: boolean;
   matrixHomeserver: string;
   matrixRoomId: string;
   matrixAccessToken: string;
+};
+
+export type ImportantTopicExpectation = {
+  expectedCount: number;
+  countLabel: string;
 };
 
 export const DEFAULT_MQTT_URL = 'mqtt://drillcloud.ru:1883';
@@ -46,6 +52,16 @@ export function readConfig(): AppConfig {
     mqttUsername: process.env.MQTT_USERNAME,
     mqttPassword: process.env.MQTT_PASSWORD,
     importantTopics: readList('IMPORTANT_TOPICS', ['data/edge5/video/v2/+', 'data/edge5/modbus/v3']),
+    importantTopicExpectations: {
+      'data/edge5/modbus/v3': {
+        expectedCount: readNumber('EDGE5_MODBUS_EXPECTED_TAGS', 7),
+        countLabel: 'тегов',
+      },
+      'data/edge5/video/v2/+': {
+        expectedCount: readNumber('EDGE5_VIDEO_EXPECTED_CAMERAS', 3),
+        countLabel: 'камер',
+      },
+    },
     staleMs: readNumber('TOPIC_STALE_MS', 15_000),
     deadMs: readNumber('TOPIC_DEAD_MS', 45_000),
     matrixEnabled: process.env.MATRIX_ENABLED === 'true',

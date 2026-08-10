@@ -11,6 +11,12 @@ function ImportantStream({ topic, now }: { topic: TopicStatus; now: string }) {
         <span>{formatAge(topic.lastSeenAt, now)}</span>
       </div>
       <h3>{topic.topic}</h3>
+      {topic.isExpectation && topic.expectedCount !== null && topic.activeCount !== null && (
+        <div className={`important-card__coverage ${topic.state === 'alive' ? '' : 'important-card__coverage--problem'}`}>
+          <strong>{topic.activeCount} из {topic.expectedCount}</strong>
+          <span>{topic.countLabel}</span>
+        </div>
+      )}
       <div className="important-card__metrics">
         <span>{topic.ratePerMinute}/мин</span>
         <span>{formatBytes(topic.bytesTotal)}</span>
@@ -34,7 +40,7 @@ export function ImportantStreams({ snapshot }: { snapshot: MonitorSnapshot }) {
         </div>
       </div>
       <div className="important-grid">
-        {snapshot.important.map((topic) => (
+        {snapshot.important.filter((topic) => topic.isExpectation).map((topic) => (
           <ImportantStream key={topic.topic} topic={topic} now={snapshot.now} />
         ))}
       </div>

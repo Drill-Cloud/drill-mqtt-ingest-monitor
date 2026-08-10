@@ -608,14 +608,19 @@ input {
   color: #fde68a;
 }
 
+.state-badge--degraded {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
 .state-badge--dead {
   background: rgba(239, 68, 68, 0.18);
   color: #fca5a5;
 }
 
 .state-badge--silent {
-  background: rgba(148, 163, 184, 0.14);
-  color: #cbd5e1;
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
 }
 
 .topic-details__header {
@@ -1089,6 +1094,12 @@ input {
   border-color: rgba(239, 68, 68, 0.56);
 }
 
+.important-card--degraded,
+.important-card--silent {
+  border-color: rgba(239, 68, 68, 0.56);
+  background: rgba(127, 29, 29, 0.12);
+}
+
 .important-card__top,
 .important-card__metrics {
   display: flex;
@@ -1105,6 +1116,29 @@ input {
   margin: 14px 0;
   overflow-wrap: anywhere;
   font-size: 0.88rem;
+}
+
+.important-card__coverage {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: -5px 0 12px;
+  color: #86efac;
+}
+
+.important-card__coverage strong {
+  font-size: 1.15rem;
+}
+
+.important-card__coverage span {
+  color: #9aa8ba;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.important-card__coverage--problem,
+.important-card__coverage--problem span {
+  color: #fca5a5;
 }
 
 .alert-list {

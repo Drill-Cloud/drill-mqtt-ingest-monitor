@@ -1,4 +1,4 @@
-export type TopicState = 'alive' | 'stale' | 'dead' | 'silent';
+export type TopicState = 'alive' | 'degraded' | 'stale' | 'dead' | 'silent';
 
 export type TopicStatus = {
   topic: string;
@@ -10,6 +10,10 @@ export type TopicStatus = {
   ratePerMinute: number;
   lastSeenAt: string | null;
   lastPayloadPreview: string;
+  isExpectation: boolean;
+  expectedCount: number | null;
+  activeCount: number | null;
+  countLabel: string | null;
 };
 
 export type TopicMessage = {

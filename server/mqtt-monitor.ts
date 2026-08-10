@@ -186,6 +186,10 @@ export class MqttMonitor extends EventEmitter {
       ratePerMinute: record.messageTimes.filter((time) => now - time <= 60_000).length,
       lastSeenAt: new Date(record.lastSeenAt).toISOString(),
       lastPayloadPreview: record.lastPayloadPreview,
+      isExpectation: false,
+      expectedCount: null,
+      activeCount: null,
+      countLabel: null,
     };
   }
 
@@ -197,17 +201,37 @@ export class MqttMonitor extends EventEmitter {
         .map((topic) => (topic.lastSeenAt ? Date.parse(topic.lastSeenAt) : null))
         .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
         .sort((left, right) => right - left)[0] ?? null;
+      const expectation = this.config.importantTopicExpectations[pattern];
+      const baseState = lastSeenAt
+        ? getTopicState(lastSeenAt, now, this.config.staleMs, this.config.deadMs)
+        : now - this.startedAt > this.config.deadMs
+          ? 'dead'
+          : 'silent';
+      const activeCount = expectation
+        ? hasWildcard(pattern)
+          ? matched.filter((topic) => topic.state === 'alive').length
+          : matched.some((topic) => topic.state === 'alive')
+            ? expectation.expectedCount
+            : 0
+        : null;
+      const state = expectation && activeCount !== null && activeCount > 0 && activeCount < expectation.expectedCount
+        ? 'degraded'
+        : baseState;
 
       return {
         topic: pattern,
         important: true,
         matchedPattern: hasWildcard(pattern) ? pattern : null,
-        state: getTopicState(lastSeenAt, now, this.config.staleMs, this.config.deadMs),
+        state,
         messageCount: matched.reduce((sum, topic) => sum + topic.messageCount, 0),
         bytesTotal: matched.reduce((sum, topic) => sum + topic.bytesTotal, 0),
         ratePerMinute: matched.reduce((sum, topic) => sum + topic.ratePerMinute, 0),
         lastSeenAt: lastSeenAt ? new Date(lastSeenAt).toISOString() : null,
         lastPayloadPreview: matched[0]?.lastPayloadPreview ?? '',
+        isExpectation: true,
+        expectedCount: expectation?.expectedCount ?? null,
+        activeCount,
+        countLabel: expectation?.countLabel ?? null,
       } satisfies TopicStatus;
     });
 

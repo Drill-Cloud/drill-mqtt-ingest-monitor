@@ -2,6 +2,7 @@ import type { TopicState } from '../types';
 
 const stateLabels: Record<TopicState, string> = {
   alive: 'живой',
+  degraded: 'неполный',
   stale: 'затихает',
   dead: 'мертвый',
   silent: 'нет данных',
@@ -9,9 +10,10 @@ const stateLabels: Record<TopicState, string> = {
 
 export const stateOrder: Record<TopicState, number> = {
   dead: 0,
-  stale: 1,
-  silent: 2,
-  alive: 3,
+  degraded: 1,
+  stale: 2,
+  silent: 3,
+  alive: 4,
 };
 
 export function StateBadge({ state }: { state: TopicState }) {
