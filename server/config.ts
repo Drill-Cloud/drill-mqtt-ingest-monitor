@@ -12,6 +12,8 @@ export type AppConfig = {
   matrixAccessToken: string;
 };
 
+export const DEFAULT_MQTT_URL = 'mqtt://drillcloud.ru:1883';
+
 function readNumber(name: string, fallback: number): number {
   const value = process.env[name];
 
@@ -39,7 +41,8 @@ function readList(name: string, fallback: string[]): string[] {
 export function readConfig(): AppConfig {
   return {
     httpPort: readNumber('HTTP_PORT', 3205),
-    mqttUrl: process.env.MQTT_URL ?? 'mqtt://194.36.208.86:1883',
+    // Используем DNS-имя, чтобы монитор не ломался при смене IP брокера.
+    mqttUrl: process.env.MQTT_URL?.trim() || DEFAULT_MQTT_URL,
     mqttUsername: process.env.MQTT_USERNAME,
     mqttPassword: process.env.MQTT_PASSWORD,
     importantTopics: readList('IMPORTANT_TOPICS', ['data/edge5/video/v2/+', 'data/edge5/modbus/v3']),

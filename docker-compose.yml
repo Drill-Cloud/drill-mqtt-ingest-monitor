@@ -6,7 +6,7 @@ services:
     environment:
       NODE_ENV: production
       HTTP_PORT: 3205
-      MQTT_URL: ${MQTT_URL}
+      MQTT_URL: ${MQTT_URL:-mqtt://drillcloud.ru:1883}
       MQTT_USERNAME: ${MQTT_USERNAME:-}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       IMPORTANT_TOPICS: ${IMPORTANT_TOPICS:-data/edge5/video/v2/+,data/edge5/modbus/v3}
