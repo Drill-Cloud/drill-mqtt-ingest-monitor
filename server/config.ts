@@ -30,6 +30,16 @@ const DEFAULT_EDGE5_MODBUS_IMPORTANT_TAGS = [
 
 const DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS = ['v1', 'v2', 'v3'];
 
+function readRequiredString(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+
+  return value;
+}
+
 function readNumber(name: string, fallback: number): number {
   const value = process.env[name];
 
@@ -59,8 +69,7 @@ function readList(name: string, fallback: string[]): string[] {
 export function readConfig(): AppConfig {
   return {
     httpPort: readNumber('HTTP_PORT', 3205),
-    // Используем DNS-имя, чтобы монитор не ломался при смене IP брокера.
-    mqttUrl: process.env.MQTT_URL,
+    mqttUrl: readRequiredString('MQTT_URL'),
     mqttUsername: process.env.MQTT_USERNAME,
     mqttPassword: process.env.MQTT_PASSWORD,
     importantTopics: readList('IMPORTANT_TOPICS', ['data/edge5/video/v2/+', 'data/edge5/modbus/v3']),
