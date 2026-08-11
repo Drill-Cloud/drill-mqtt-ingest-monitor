@@ -15,11 +15,31 @@ export type AppConfig = {
 };
 
 export type ImportantTopicExpectation = {
-  expectedCount: number;
+  expectedItems: string[];
   countLabel: string;
 };
 
-export const DEFAULT_MQTT_URL = 'mqtt://drillcloud.ru:1883';
+const DEFAULT_EDGE5_MODBUS_IMPORTANT_TAGS = [
+  'edge5-v3-wk',
+  'edge5-v3-hk',
+  'edge5-v3-vw',
+  'edge5-v3-pdk',
+  'edge5-v3-h2s',
+  'edge5-v3-nrot',
+  'edge5-v3-vsp',
+];
+
+const DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS = ['v1', 'v2', 'v3'];
+
+function readRequiredString(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+
+  return value;
+}
 
 function readNumber(name: string, fallback: number): number {
   const value = process.env[name];
@@ -36,30 +56,31 @@ function readList(name: string, fallback: string[]): string[] {
   const value = process.env[name];
 
   if (!value) {
-    return fallback;
+    return [...new Set(fallback)];
   }
 
-  return value
+  const items = value
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+
+  return [...new Set(items)];
 }
 
 export function readConfig(): AppConfig {
   return {
     httpPort: readNumber('HTTP_PORT', 3205),
-    // Используем DNS-имя, чтобы монитор не ломался при смене IP брокера.
-    mqttUrl: process.env.MQTT_URL?.trim() || DEFAULT_MQTT_URL,
+    mqttUrl: readRequiredString('MQTT_URL'),
     mqttUsername: process.env.MQTT_USERNAME,
     mqttPassword: process.env.MQTT_PASSWORD,
     importantTopics: readList('IMPORTANT_TOPICS', ['data/edge5/video/v2/+', 'data/edge5/modbus/v3']),
     importantTopicExpectations: {
       'data/edge5/modbus/v3': {
-        expectedCount: readNumber('EDGE5_MODBUS_EXPECTED_TAGS', 7),
+        expectedItems: readList('EDGE5_MODBUS_IMPORTANT_TAGS', DEFAULT_EDGE5_MODBUS_IMPORTANT_TAGS),
         countLabel: 'тегов',
       },
       'data/edge5/video/v2/+': {
-        expectedCount: readNumber('EDGE5_VIDEO_EXPECTED_CAMERAS', 3),
+        expectedItems: readList('EDGE5_VIDEO_IMPORTANT_CAMERAS', DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS),
         countLabel: 'камер',
       },
     },

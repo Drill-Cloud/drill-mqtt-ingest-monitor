@@ -24,6 +24,22 @@ type ImportantState = {
   alertSent: boolean;
 };
 
+function countActiveExpectedItems(
+  pattern: string,
+  topics: TopicStatus[],
+  expectedItems?: string[],
+): number | null {
+  if (!expectedItems) return null;
+
+  const aliveTopics = topics.filter((topic) => topic.state === 'alive');
+  if (!hasWildcard(pattern)) {
+    return aliveTopics.length > 0 ? expectedItems.length : 0;
+  }
+
+  const activeItems = new Set(aliveTopics.map((topic) => topic.topic.split('/').at(-1)));
+  return expectedItems.filter((item) => activeItems.has(item)).length;
+}
+
 export class MqttMonitor extends EventEmitter {
   private client: MqttClient | null = null;
   private connected = false;
@@ -254,26 +270,26 @@ export class MqttMonitor extends EventEmitter {
     const observedImportant = topics.filter((topic) => topic.important);
     const configured = this.getImportantPatterns().map((pattern) => {
       const matched = topics.filter((topic) => topicMatches(pattern, topic.topic));
+      const expectation = this.config.importantTopicExpectations[pattern];
       const lastSeenAt = matched
         .map((topic) => (topic.lastSeenAt ? Date.parse(topic.lastSeenAt) : null))
-        .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+        .filter((value): value is number => value !== null && Number.isFinite(value))
         .sort((left, right) => right - left)[0] ?? null;
-      const expectation = this.config.importantTopicExpectations[pattern];
-      const baseState = lastSeenAt
-        ? getTopicState(lastSeenAt, now, this.config.staleMs, this.config.deadMs)
-        : now - this.startedAt > this.config.deadMs
-          ? 'dead'
-          : 'silent';
-      const activeCount = expectation
-        ? hasWildcard(pattern)
-          ? matched.filter((topic) => topic.state === 'alive').length
-          : matched.some((topic) => topic.state === 'alive')
-            ? expectation.expectedCount
-            : 0
-        : null;
-      const state = expectation && activeCount !== null && activeCount > 0 && activeCount < expectation.expectedCount
-        ? 'degraded'
-        : baseState;
+      const expectedCount = expectation?.expectedItems.length ?? null;
+      const activeCount = countActiveExpectedItems(pattern, matched, expectation?.expectedItems);
+      const isPartiallyActive = activeCount !== null
+        && expectedCount !== null
+        && activeCount > 0
+        && activeCount < expectedCount;
+
+      let state: TopicState;
+      if (isPartiallyActive) {
+        state = 'degraded';
+      } else if (lastSeenAt !== null) {
+        state = getTopicState(lastSeenAt, now, this.config.staleMs, this.config.deadMs);
+      } else {
+        state = now - this.startedAt > this.config.deadMs ? 'dead' : 'silent';
+      }
 
       return {
         topic: pattern,
@@ -286,7 +302,7 @@ export class MqttMonitor extends EventEmitter {
         lastSeenAt: lastSeenAt ? new Date(lastSeenAt).toISOString() : null,
         lastPayloadPreview: matched[0]?.lastPayloadPreview ?? '',
         isExpectation: true,
-        expectedCount: expectation?.expectedCount ?? null,
+        expectedCount,
         activeCount,
         countLabel: expectation?.countLabel ?? null,
       } satisfies TopicStatus;
