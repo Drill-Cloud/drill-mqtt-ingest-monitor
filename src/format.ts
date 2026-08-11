@@ -21,7 +21,11 @@ export function formatBytes(value: number): string {
     return `${(value / 1024).toFixed(1)} KB`;
   }
 
-  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
 export function formatUptime(startedAt: string, now: string): string {

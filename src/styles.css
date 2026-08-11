@@ -27,6 +27,93 @@ input {
   font: inherit;
 }
 
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.info-tooltip button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 50%;
+  outline: 0;
+  background: rgba(15, 23, 42, 0.56);
+  color: #8fa0b6;
+  cursor: help;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.info-tooltip button:hover,
+.info-tooltip button:focus-visible,
+.info-tooltip button[aria-expanded="true"] {
+  border-color: rgba(125, 211, 252, 0.48);
+  background: rgba(14, 116, 144, 0.2);
+  color: #bae6fd;
+  transform: translateY(-1px);
+}
+
+.info-tooltip__content {
+  position: fixed;
+  z-index: 2000;
+  width: min(290px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 7px;
+  background: rgba(5, 11, 21, 0.97);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.5;
+  pointer-events: none;
+  text-transform: none;
+  transform: translate(-50%, -100%);
+  animation: tooltip-in 140ms ease-out;
+}
+
+.info-tooltip__content::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgba(125, 211, 252, 0.28);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.28);
+  background: rgba(5, 11, 21, 0.97);
+  content: "";
+  transform: translate(-50%, -4px) rotate(45deg);
+}
+
+.broker-heading-with-help,
+.stat-card__label,
+.broker-metric-card__label,
+.broker-inline-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.broker-inline-label {
+  min-width: 0;
+}
+
+.broker-inline-label .info-tooltip button,
+.broker-live-label .info-tooltip button {
+  width: 20px;
+  height: 20px;
+}
+
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translate(-50%, calc(-100% + 5px)); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+
 .page {
   min-height: 100vh;
 }
@@ -255,10 +342,14 @@ input {
     rgba(8, 13, 24, 0.76);
 }
 
-.stat-card span {
+.stat-card__label > span {
   color: #93a4bb;
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.stat-card__label {
+  justify-content: space-between;
 }
 
 .stat-card strong {
@@ -998,6 +1089,568 @@ input {
   font-size: 1.04rem;
 }
 
+.broker-hero--dashboard {
+  position: relative;
+  align-items: center;
+  overflow: hidden;
+  min-height: 150px;
+  padding: 20px;
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    radial-gradient(circle at 8% 20%, rgba(56, 189, 248, 0.12), transparent 26%),
+    radial-gradient(circle at 92% 0%, rgba(212, 165, 116, 0.14), transparent 30%),
+    linear-gradient(135deg, rgba(12, 22, 38, 0.96), rgba(8, 13, 24, 0.88));
+}
+
+.broker-hero--dashboard::after {
+  position: absolute;
+  right: -120px;
+  bottom: -180px;
+  width: 380px;
+  height: 380px;
+  border: 1px solid rgba(96, 165, 250, 0.08);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 44px rgba(96, 165, 250, 0.025),
+    0 0 0 92px rgba(96, 165, 250, 0.02);
+  content: "";
+  pointer-events: none;
+}
+
+.broker-hero__identity {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.broker-hero__radar {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(96, 165, 250, 0.2) 0 3%, transparent 4%),
+    repeating-radial-gradient(circle, transparent 0 15%, rgba(96, 165, 250, 0.12) 16% 17%, transparent 18% 30%);
+  color: #7dd3fc;
+  box-shadow: inset 0 0 24px rgba(56, 189, 248, 0.12), 0 0 30px rgba(56, 189, 248, 0.08);
+}
+
+.broker-hero__radar span {
+  position: absolute;
+  inset: 50% 50% 0 0;
+  background: linear-gradient(135deg, rgba(125, 211, 252, 0.4), transparent 72%);
+  transform-origin: 100% 0;
+  animation: broker-radar-sweep 4s linear infinite;
+}
+
+.broker-hero__badges {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: max-content;
+  padding: 9px 12px;
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  border-radius: 999px;
+  background: rgba(30, 64, 175, 0.12);
+  color: #bfdbfe;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sys-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 150px;
+  color: #93c5fd;
+}
+
+.sys-empty-state h2 {
+  margin: 0 0 7px;
+  color: #f8fafc;
+}
+
+.sys-empty-state p {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.broker-dashboard-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 14px;
+}
+
+.broker-runtime-card,
+.broker-clients-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 230px;
+  padding: 18px;
+}
+
+.broker-runtime-card {
+  background:
+    linear-gradient(145deg, rgba(20, 41, 66, 0.86), rgba(8, 13, 24, 0.78)),
+    rgba(8, 13, 24, 0.72);
+}
+
+.broker-runtime-card::after {
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.12), transparent 66%);
+  content: "";
+  animation: broker-aura 5s ease-in-out infinite;
+}
+
+.broker-runtime-card__top,
+.broker-flow-lane__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.broker-runtime-card__top {
+  color: #8293aa;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.broker-live-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #86efac;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.broker-live-label i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.48);
+  animation: broker-live-pulse 1.8s ease-out infinite;
+}
+
+.broker-runtime-card__version {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 34px;
+  color: #7dd3fc;
+}
+
+.broker-runtime-card__version span,
+.broker-runtime-card__facts span,
+.broker-clients-copy div span,
+.broker-app-summary__grid span {
+  display: block;
+  color: #8394aa;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.broker-runtime-card__version strong {
+  display: block;
+  margin-top: 5px;
+  color: #f8fafc;
+  font-size: 1.15rem;
+}
+
+.broker-runtime-card__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.broker-runtime-card__facts div,
+.broker-app-summary__grid div {
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.26);
+}
+
+.broker-runtime-card__facts strong,
+.broker-app-summary__grid strong {
+  display: block;
+  margin-top: 8px;
+  color: #f8fafc;
+  font-size: 1.08rem;
+}
+
+.broker-clients-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.78fr) minmax(240px, 1.22fr);
+  align-items: center;
+  gap: 24px;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(34, 197, 94, 0.1), transparent 33%),
+    linear-gradient(145deg, rgba(14, 30, 37, 0.88), rgba(8, 13, 24, 0.78));
+}
+
+.broker-clients-ring {
+  display: grid;
+  width: 170px;
+  height: 170px;
+  place-self: center;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(#4ade80 var(--client-progress), rgba(51, 65, 85, 0.42) 0);
+  box-shadow: 0 0 36px rgba(34, 197, 94, 0.12);
+  transition: background 700ms ease;
+}
+
+.broker-clients-ring::before {
+  position: absolute;
+  width: 142px;
+  height: 142px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 50%;
+  background: #0b121c;
+  content: "";
+}
+
+.broker-clients-ring div {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.broker-clients-ring strong,
+.broker-clients-ring span {
+  display: block;
+}
+
+.broker-clients-ring strong {
+  font-size: 2.3rem;
+  line-height: 1;
+}
+
+.broker-clients-ring span {
+  margin-top: 8px;
+  color: #86efac;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.broker-clients-copy h3 {
+  margin: 5px 0 16px;
+  font-size: 1.04rem;
+}
+
+.broker-clients-copy div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.broker-clients-copy div:last-child {
+  border-bottom: 0;
+}
+
+.broker-clients-copy div strong {
+  color: #e2e8f0;
+}
+
+.broker-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.broker-metric-card {
+  position: relative;
+  min-height: 148px;
+  overflow: hidden;
+  padding: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 42%), rgba(8, 13, 24, 0.74);
+}
+
+.broker-metric-card::after {
+  position: absolute;
+  right: -28px;
+  bottom: -35px;
+  width: 95px;
+  height: 95px;
+  border-radius: 50%;
+  background: var(--metric-glow);
+  content: "";
+  opacity: 0.4;
+  animation: broker-aura 5.5s ease-in-out infinite;
+}
+
+.broker-metric-card--blue { --metric-accent: #7dd3fc; --metric-glow: rgba(56, 189, 248, 0.18); }
+.broker-metric-card--green { --metric-accent: #86efac; --metric-glow: rgba(34, 197, 94, 0.16); }
+.broker-metric-card--orange { --metric-accent: #fdba74; --metric-glow: rgba(249, 115, 22, 0.16); }
+.broker-metric-card--red { --metric-accent: #fca5a5; --metric-glow: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.28); }
+
+.broker-metric-card__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--metric-accent), transparent 68%);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--metric-accent), transparent 88%);
+  color: var(--metric-accent);
+}
+
+.broker-metric-card__label,
+.broker-metric-card > strong,
+.broker-metric-card > small {
+  position: relative;
+  z-index: 1;
+  display: block;
+}
+
+.broker-metric-card__label {
+  justify-content: space-between;
+  margin-top: 13px;
+}
+
+.broker-metric-card__label > span {
+  color: #8fa0b6;
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.broker-metric-card > strong {
+  margin-top: 6px;
+  font-size: 1.28rem;
+}
+
+.broker-metric-card > small {
+  margin-top: 6px;
+  color: #77879d;
+  font-size: 0.68rem;
+}
+
+.broker-traffic-panel {
+  padding: 18px;
+}
+
+.broker-flow-list {
+  display: grid;
+  gap: 15px;
+}
+
+.broker-flow-lane {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 120px;
+  gap: 14px;
+  align-items: center;
+}
+
+.broker-flow-lane__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.broker-flow-lane__icon--blue { background: rgba(56, 189, 248, 0.12); color: #7dd3fc; }
+.broker-flow-lane__icon--orange { background: rgba(249, 115, 22, 0.12); color: #fdba74; }
+
+.broker-flow-lane__meta {
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+}
+
+.broker-flow-lane__meta span {
+  color: #9fb0c7;
+  font-family: "JetBrains Mono", "Cascadia Code", monospace;
+}
+
+.broker-flow-lane__track {
+  position: relative;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.5);
+}
+
+.broker-flow-lane__value {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 850ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.broker-flow-lane__value--blue { background: linear-gradient(90deg, #0284c7, #7dd3fc); }
+.broker-flow-lane__value--orange { background: linear-gradient(90deg, #c2410c, #fdba74); }
+
+.broker-flow-lane__packet {
+  position: absolute;
+  top: 0;
+  width: 28px;
+  height: 100%;
+  border-radius: inherit;
+  filter: blur(1px);
+  animation: broker-packet 2.4s linear infinite;
+}
+
+.broker-flow-lane__packet--blue { background: rgba(224, 242, 254, 0.92); box-shadow: 0 0 14px #38bdf8; }
+.broker-flow-lane__packet--orange { background: rgba(255, 237, 213, 0.92); box-shadow: 0 0 14px #fb923c; animation-delay: -1.1s; }
+
+.broker-flow-lane__total {
+  text-align: right;
+}
+
+.broker-flow-lane__total span,
+.broker-flow-lane__total strong {
+  display: block;
+}
+
+.broker-flow-lane__total span {
+  color: #77879d;
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.broker-flow-lane__total strong {
+  margin-top: 5px;
+  font-size: 0.88rem;
+}
+
+.broker-message-rates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.11);
+}
+
+.broker-message-rates div {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.11);
+  border-radius: 6px;
+  color: #7dd3fc;
+}
+
+.broker-message-rates span {
+  color: #8fa0b6;
+  font-size: 0.72rem;
+}
+
+.broker-message-rates strong {
+  color: #f8fafc;
+  font-size: 0.78rem;
+}
+
+.broker-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 14px;
+}
+
+.broker-app-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.broker-readonly-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-color: rgba(96, 165, 250, 0.2);
+  background:
+    radial-gradient(circle at 5% 50%, rgba(59, 130, 246, 0.12), transparent 35%),
+    rgba(8, 13, 24, 0.72);
+}
+
+.broker-readonly-panel__icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 50%;
+  background: rgba(30, 64, 175, 0.12);
+  color: #93c5fd;
+}
+
+.broker-readonly-panel h2 {
+  margin: 5px 0 7px;
+  font-size: 1rem;
+}
+
+.broker-readonly-panel p {
+  margin: 0;
+  color: #8fa0b6;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+@keyframes broker-radar-sweep {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes broker-live-pulse {
+  70% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+
+@keyframes broker-aura {
+  0%, 100% { opacity: 0.3; transform: scale(0.92); }
+  50% { opacity: 0.66; transform: scale(1.08); }
+}
+
+@keyframes broker-packet {
+  from { left: -12%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  to { left: 100%; opacity: 0; }
+}
+
 .diagnostic-list,
 .config-list {
   display: grid;
@@ -1218,6 +1871,21 @@ input {
   .topic-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .broker-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.important-card__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.important-card__title h3 {
+  flex: 1;
 }
 
 @media (max-width: 980px) {
@@ -1238,6 +1906,11 @@ input {
   .side-stack .important-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .broker-dashboard-lead,
+  .broker-bottom-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1257,6 +1930,9 @@ input {
   .status-grid,
   .side-stack .important-grid,
   .broker-grid,
+  .broker-metric-grid,
+  .broker-message-rates,
+  .broker-app-summary__grid,
   .topic-summary,
   .topic-details__stats {
     grid-template-columns: 1fr;
@@ -1279,6 +1955,33 @@ input {
     flex-direction: column;
   }
 
+  .broker-hero__identity,
+  .broker-readonly-panel {
+    align-items: flex-start;
+  }
+
+  .broker-hero__radar {
+    width: 58px;
+    height: 58px;
+  }
+
+  .broker-hero__badges {
+    justify-content: flex-start;
+  }
+
+  .broker-clients-card {
+    grid-template-columns: 1fr;
+  }
+
+  .broker-flow-lane {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .broker-flow-lane__total {
+    grid-column: 2;
+    text-align: left;
+  }
+
   .config-row {
     grid-template-columns: 18px minmax(0, 1fr);
   }
@@ -1299,5 +2002,23 @@ input {
 
   .search-box {
     min-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .broker-hero__radar span,
+  .broker-live-label i,
+  .broker-runtime-card::after,
+  .broker-metric-card::after,
+  .broker-flow-lane__packet {
+    animation: none;
+  }
+
+  .broker-flow-lane__value {
+    transition: none;
+  }
+
+  .info-tooltip__content {
+    animation: none;
   }
 }

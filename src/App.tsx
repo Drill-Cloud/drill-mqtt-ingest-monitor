@@ -31,7 +31,7 @@ const sectionTitles: Record<Section, string> = {
 export function App() {
   const [snapshot, setSnapshot] = useState<MonitorSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [section, setSection] = useState<Section>('topics');
+  const [section, setSection] = useState<Section>('broker');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,14 +55,15 @@ export function App() {
   }, []);
 
   const stats = useMemo(() => {
-    const topics = snapshot?.topics ?? [];
+    const topics = (snapshot?.topics ?? []).filter((topic) => !topic.topic.startsWith('$SYS/'));
+    const telemetryTopics = topics.filter((topic) => !topic.topic.includes('/video/'));
     const important = (snapshot?.important ?? []).filter((topic) => topic.isExpectation);
 
     return {
       topics: topics.length,
       importantAlive: important.filter((topic) => topic.state === 'alive').length,
       importantProblems: important.filter((topic) => topic.state !== 'alive').length,
-      rate: topics.reduce((sum, topic) => sum + topic.ratePerMinute, 0),
+      rate: telemetryTopics.reduce((sum, topic) => sum + topic.ratePerMinute, 0),
     };
   }, [snapshot]);
 
@@ -138,15 +139,16 @@ export function App() {
         )}
 
         <section className="status-grid">
-          <StatCard label="Всего топиков" value={stats.topics} />
-          <StatCard label="Важные живые" value={stats.importantAlive} tone="good" />
+          <StatCard label="Прикладных топиков" tooltip="Количество увиденных пользовательских топиков без служебной иерархии $SYS." value={stats.topics} />
+          <StatCard label="Важные живые" tooltip="Важные потоки, которые сейчас получают данные и имеют полный ожидаемый состав." value={stats.importantAlive} tone="good" />
           <StatCard
             label="Важные с проблемой"
+            tooltip="Важные потоки в состояниях degraded, stale, dead или silent. Они требуют проверки источника данных или ожидаемого состава."
             value={stats.importantProblems}
             tone={stats.importantProblems > 0 ? 'bad' : 'good'}
           />
-          <StatCard label="Сообщений/мин" value={stats.rate} />
-          <StatCard label="Аптайм" value={formatUptime(snapshot.startedAt, snapshot.now)} />
+          <StatCard label="Телеметрия/мин" tooltip="Количество MQTT-сообщений за минуту без $SYS и видеочанков. Видео оценивается отдельно по скорости трафика." value={stats.rate} />
+          <StatCard label="Аптайм" tooltip="Время работы процесса mqtt-monitor с момента последнего запуска." value={formatUptime(snapshot.startedAt, snapshot.now)} />
         </section>
 
         {section === 'broker' && <BrokerOverview snapshot={snapshot} />}
@@ -157,7 +159,7 @@ export function App() {
         <footer className="footer">
           <div>
             <CheckCircle2 size={15} />
-            Подписка: #
+            Подписки: # + $SYS/#
           </div>
           <div>{formatUptime(snapshot.startedAt, snapshot.now)}</div>
         </footer>

@@ -1,4 +1,4 @@
-import { ArrowLeft, Eye, Maximize2, MessageSquareText, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Eye, Maximize2, MessageSquareText, Plus, RadioTower, Search, X } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { addImportantTopic, getTopicMessages } from '../api';
 import { formatAge, formatBytes } from '../format';
@@ -271,6 +271,7 @@ function TopicSummary({ now, topic }: { now: string; topic: TopicStatus }) {
 export function TopicExplorer({ onSnapshot, snapshot }: TopicExplorerProps) {
   const [query, setQuery] = useState('');
   const [importantOnly, setImportantOnly] = useState(false);
+  const [showSystemTopics, setShowSystemTopics] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [messages, setMessages] = useState<TopicMessage[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<TopicMessage | null>(null);
@@ -280,10 +281,11 @@ export function TopicExplorer({ onSnapshot, snapshot }: TopicExplorerProps) {
     const normalizedQuery = query.trim().toLowerCase();
 
     return snapshot.topics
+      .filter((topic) => showSystemTopics || !topic.topic.startsWith('$SYS/'))
       .filter((topic) => (importantOnly ? topic.important : true))
       .filter((topic) => topic.topic.toLowerCase().includes(normalizedQuery))
       .sort((left, right) => stateOrder[left.state] - stateOrder[right.state] || left.topic.localeCompare(right.topic));
-  }, [importantOnly, query, snapshot.topics]);
+  }, [importantOnly, query, showSystemTopics, snapshot.topics]);
 
   const selectedTopicStatus = useMemo(
     () => snapshot.topics.find((topic) => topic.topic === selectedTopic) ?? null,
@@ -372,6 +374,10 @@ export function TopicExplorer({ onSnapshot, snapshot }: TopicExplorerProps) {
           <button className={importantOnly ? 'toggle toggle--active' : 'toggle'} onClick={() => setImportantOnly((value) => !value)}>
             <Eye size={16} />
             Только важные
+          </button>
+          <button className={showSystemTopics ? 'toggle toggle--active' : 'toggle'} onClick={() => setShowSystemTopics((value) => !value)}>
+            <RadioTower size={16} />
+            Показывать $SYS
           </button>
         </div>
       </div>

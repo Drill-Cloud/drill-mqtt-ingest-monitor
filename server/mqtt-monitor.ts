@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import mqtt, { type MqttClient } from 'mqtt';
 import type { AppConfig } from './config.js';
 import { MatrixNotifier } from './matrix.js';
+import { SysMetricsCollector } from './sys-metrics.js';
 import { getPayloadPreview, getPayloadText, getTopicState, hasWildcard, topicMatches } from './topic-utils.js';
 import type { AlertEvent, MonitorSnapshot, TopicMessage, TopicState, TopicStatus } from './types.js';
 
@@ -13,6 +15,7 @@ type TopicRecord = {
   topic: string;
   messageCount: number;
   bytesTotal: number;
+  byteSamples: Array<{ receivedAt: number; bytes: number }>;
   messageTimes: number[];
   messages: TopicMessage[];
   lastSeenAt: number;
@@ -42,6 +45,7 @@ function countActiveExpectedItems(
 
 export class MqttMonitor extends EventEmitter {
   private client: MqttClient | null = null;
+  private readonly clientId = `mqtt-monitor-${randomUUID()}`;
   private connected = false;
   private readonly startedAt = Date.now();
   private readonly topics = new Map<string, TopicRecord>();
@@ -49,6 +53,7 @@ export class MqttMonitor extends EventEmitter {
   private readonly extraImportantTopics = new Set<string>();
   private readonly alerts: AlertEvent[] = [];
   private readonly notifier: MatrixNotifier;
+  private readonly sysMetrics = new SysMetricsCollector();
   private interval: NodeJS.Timeout | null = null;
   private reconnectAttempts = 0;
   private stopping = false;
@@ -72,6 +77,8 @@ export class MqttMonitor extends EventEmitter {
     this.stopping = false;
     this.log('info', 'mqtt.connecting', { broker: this.publicBrokerUrl() });
     this.client = mqtt.connect(this.config.mqttUrl, {
+      clientId: this.clientId,
+      clean: true,
       username: this.config.mqttUsername,
       password: this.config.mqttPassword,
       reconnectPeriod: 3_000,
@@ -82,7 +89,7 @@ export class MqttMonitor extends EventEmitter {
       this.connected = true;
       this.reconnectAttempts = 0;
       this.log('info', 'mqtt.connected', { broker: this.publicBrokerUrl() });
-      this.client?.subscribe(MQTT_SUBSCRIPTIONS, (error, granted) => {
+      this.client?.subscribe(MQTT_SUBSCRIPTIONS, { qos: 0 }, (error, granted) => {
         if (error) {
           this.log('error', 'mqtt.subscribe_failed', { error: error.message });
           return;
@@ -161,6 +168,7 @@ export class MqttMonitor extends EventEmitter {
         roomConfigured: Boolean(this.config.matrixRoomId),
         accessTokenConfigured: Boolean(this.config.matrixAccessToken),
       },
+      brokerMetrics: this.sysMetrics.getSnapshot(),
       importantPatterns: this.getImportantPatterns(),
       staleMs: this.config.staleMs,
       deadMs: this.config.deadMs,
@@ -192,16 +200,21 @@ export class MqttMonitor extends EventEmitter {
       topic,
       messageCount: 0,
       bytesTotal: 0,
+      byteSamples: [],
       messageTimes: [],
       messages: [],
       lastSeenAt: now,
       lastPayloadPreview: '',
     };
     const payloadPreview = getPayloadPreview(payload);
-    const payloadText = getPayloadText(payload);
+    const isBinaryStream = topic.includes('/video/');
+    const payloadText = isBinaryStream
+      ? { payload: '<binary stream payload is not stored>', payloadTruncated: true }
+      : getPayloadText(payload);
 
     const isSystemTopic = topic.startsWith('$SYS/');
     if (isSystemTopic) {
+      this.sysMetrics.record(topic, payload, now);
       this.systemMessages += 1;
       this.systemBytes += payload.byteLength;
       this.systemTopics.add(topic);
@@ -216,6 +229,10 @@ export class MqttMonitor extends EventEmitter {
 
     record.messageCount += 1;
     record.bytesTotal += payload.byteLength;
+    record.byteSamples = [
+      ...record.byteSamples.filter((sample) => now - sample.receivedAt <= 60_000),
+      { receivedAt: now, bytes: payload.byteLength },
+    ];
     record.lastSeenAt = now;
     record.lastPayloadPreview = payloadPreview;
     record.messageTimes = [...record.messageTimes.filter((time) => now - time <= 60_000), now];
@@ -256,6 +273,7 @@ export class MqttMonitor extends EventEmitter {
       state: getTopicState(record.lastSeenAt, now, this.config.staleMs, this.config.deadMs),
       messageCount: record.messageCount,
       bytesTotal: record.bytesTotal,
+      bytesPerMinute: record.byteSamples.reduce((sum, sample) => sum + sample.bytes, 0),
       ratePerMinute: record.messageTimes.filter((time) => now - time <= 60_000).length,
       lastSeenAt: new Date(record.lastSeenAt).toISOString(),
       lastPayloadPreview: record.lastPayloadPreview,
@@ -298,6 +316,7 @@ export class MqttMonitor extends EventEmitter {
         state,
         messageCount: matched.reduce((sum, topic) => sum + topic.messageCount, 0),
         bytesTotal: matched.reduce((sum, topic) => sum + topic.bytesTotal, 0),
+        bytesPerMinute: matched.reduce((sum, topic) => sum + topic.bytesPerMinute, 0),
         ratePerMinute: matched.reduce((sum, topic) => sum + topic.ratePerMinute, 0),
         lastSeenAt: lastSeenAt ? new Date(lastSeenAt).toISOString() : null,
         lastPayloadPreview: matched[0]?.lastPayloadPreview ?? '',

@@ -57,7 +57,7 @@ MQTT_PASSWORD=
 
 IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3
 EDGE5_MODBUS_IMPORTANT_TAGS=edge5-v3-wk,edge5-v3-hk,edge5-v3-vw,edge5-v3-pdk,edge5-v3-h2s,edge5-v3-nrot,edge5-v3-vsp
-EDGE5_VIDEO_IMPORTANT_CAMERAS=v1,v2,v3
+EDGE5_VIDEO_IMPORTANT_CAMERAS=camera-11,camera-12,camera-13
 TOPIC_STALE_MS=15000
 TOPIC_DEAD_MS=45000
 ACTIVITY_LOG_INTERVAL_MS=60000
@@ -101,6 +101,10 @@ IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3,data/edge5/custom/+
 Payload сообщений в stdout не пишется: это защищает секретные данные и не заполняет диск бинарными видеопакетами. Период сводки задаётся через `ACTIVITY_LOG_INTERVAL_MS`.
 
 Обычная MQTT-подписка `#` не включает служебную иерархию `$SYS`. Поэтому монитор подписывается на неё отдельно и получает broker-метрики: число клиентов, сообщения, байты, dropped publish и очереди.
+
+Раздел **Брокер** преобразует известные `$SYS`-топики в человекочитаемый dashboard: версия и uptime Mosquitto, клиенты, подписки, retained и stored messages, память, входящий/исходящий трафик и минутная нагрузка. Системные топики не входят в прикладные счётчики и скрыты в разделе **Топики** по умолчанию; для глубокой диагностики их можно показать отдельным переключателем.
+
+Монитор является обычным независимым подписчиком с QoS 0 и уникальным `clientId`. Он не использует shared subscriptions и не публикует сообщения, поэтому не забирает публикации у `mqtt-ingest`: брокер доставляет каждому подписчику отдельную копию. Payload бинарных video-топиков монитор не сохраняет, учитывая только факт сообщения, размер и скорость потока.
 
 ### Подключение контейнеров в Portainer
 
@@ -150,6 +154,8 @@ user mqtt-monitor
 topic read #
 topic read $SYS/#
 ```
+
+Именно ACL брокера является окончательной гарантией read-only режима: даже если в приложении позже по ошибке появится попытка публикации, Mosquitto отклонит её из-за отсутствия правила `topic write`.
 
 Если используются Dynamic Security ACL, эквивалентные разрешения задаются для `subscribe` и `publishClientReceive`. Логин и пароль передаются монитору через `MQTT_USERNAME` и `MQTT_PASSWORD` в Portainer secrets/environment.
 

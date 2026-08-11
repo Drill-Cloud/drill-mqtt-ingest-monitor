@@ -29,7 +29,7 @@ const DEFAULT_EDGE5_MODBUS_IMPORTANT_TAGS = [
   'edge5-v3-vsp',
 ];
 
-const DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS = ['v1', 'v2', 'v3'];
+const DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS = ['camera-11', 'camera-12', 'camera-13'];
 
 function readRequiredString(name: string): string {
   const value = process.env[name]?.trim();
