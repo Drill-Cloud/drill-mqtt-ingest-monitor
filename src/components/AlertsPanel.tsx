@@ -6,7 +6,7 @@ export function AlertsPanel({ snapshot }: { snapshot: MonitorSnapshot }) {
     <aside className="panel">
       <div className="panel__header">
         <div>
-          <span className="kicker">Matrix</span>
+          <span className="kicker">Telegram</span>
           <h2>Алерты</h2>
         </div>
         <Bell size={18} />

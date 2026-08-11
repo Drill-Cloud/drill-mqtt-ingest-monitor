@@ -8,10 +8,11 @@ export type AppConfig = {
   staleMs: number;
   deadMs: number;
   activityLogIntervalMs: number;
-  matrixEnabled: boolean;
-  matrixHomeserver: string;
-  matrixRoomId: string;
-  matrixAccessToken: string;
+  telegramEnabled: boolean;
+  telegramBotToken: string;
+  telegramChatId: string;
+  telegramChannelName: string;
+  telegramMessageThreadId: number | null;
 };
 
 export type ImportantTopicExpectation = {
@@ -52,6 +53,14 @@ function readNumber(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function readOptionalNumber(name: string): number | null {
+  const value = process.env[name]?.trim();
+  if (!value) return null;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
 function readList(name: string, fallback: string[]): string[] {
   const value = process.env[name];
 
@@ -87,9 +96,10 @@ export function readConfig(): AppConfig {
     staleMs: readNumber('TOPIC_STALE_MS', 15_000),
     deadMs: readNumber('TOPIC_DEAD_MS', 45_000),
     activityLogIntervalMs: readNumber('ACTIVITY_LOG_INTERVAL_MS', 60_000),
-    matrixEnabled: process.env.MATRIX_ENABLED === 'true',
-    matrixHomeserver: process.env.MATRIX_HOMESERVER ?? 'https://matrix.greact.online',
-    matrixRoomId: process.env.MATRIX_ROOM_ID ?? '',
-    matrixAccessToken: process.env.MATRIX_ACCESS_TOKEN ?? '',
+    telegramEnabled: process.env.TELEGRAM_ENABLED === 'true',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() ?? '',
+    telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim() ?? '',
+    telegramChannelName: process.env.TELEGRAM_CHANNEL_NAME?.trim() ?? '',
+    telegramMessageThreadId: readOptionalNumber('TELEGRAM_MESSAGE_THREAD_ID'),
   };
 }

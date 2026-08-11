@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import mqtt, { type MqttClient } from 'mqtt';
 import type { AppConfig } from './config.js';
-import { MatrixNotifier } from './matrix.js';
+import { TelegramNotifier } from './telegram.js';
 import { SysMetricsCollector } from './sys-metrics.js';
 import { getPayloadPreview, getPayloadText, getTopicState, hasWildcard, topicMatches } from './topic-utils.js';
 import type { AlertEvent, MonitorSnapshot, TopicMessage, TopicState, TopicStatus } from './types.js';
@@ -25,6 +25,7 @@ type TopicRecord = {
 type ImportantState = {
   state: TopicState;
   alertSent: boolean;
+  outageStartedAt: number | null;
 };
 
 function countActiveExpectedItems(
@@ -52,9 +53,10 @@ export class MqttMonitor extends EventEmitter {
   private readonly importantStates = new Map<string, ImportantState>();
   private readonly extraImportantTopics = new Set<string>();
   private readonly alerts: AlertEvent[] = [];
-  private readonly notifier: MatrixNotifier;
+  private readonly notifier: TelegramNotifier;
   private readonly sysMetrics = new SysMetricsCollector();
   private interval: NodeJS.Timeout | null = null;
+  private checkingImportantTopics = false;
   private reconnectAttempts = 0;
   private stopping = false;
   private lastErrorMessage = '';
@@ -69,7 +71,7 @@ export class MqttMonitor extends EventEmitter {
 
   constructor(private readonly config: AppConfig) {
     super();
-    this.notifier = new MatrixNotifier(config);
+    this.notifier = new TelegramNotifier(config);
     this.nextActivityLogAt = Date.now() + config.activityLogIntervalMs;
   }
 
@@ -162,11 +164,15 @@ export class MqttMonitor extends EventEmitter {
       connected: this.connected,
       startedAt: new Date(this.startedAt).toISOString(),
       now: new Date(now).toISOString(),
-      matrix: {
-        enabled: this.config.matrixEnabled,
-        homeserver: this.config.matrixHomeserver,
-        roomConfigured: Boolean(this.config.matrixRoomId),
-        accessTokenConfigured: Boolean(this.config.matrixAccessToken),
+      telegram: {
+        enabled: this.config.telegramEnabled,
+        ready: this.config.telegramEnabled
+          && Boolean(this.config.telegramBotToken)
+          && Boolean(this.config.telegramChatId),
+        recipient: this.config.telegramChannelName || this.config.telegramChatId || 'не задан',
+        chatConfigured: Boolean(this.config.telegramChatId),
+        botTokenConfigured: Boolean(this.config.telegramBotToken),
+        messageThreadConfigured: this.config.telegramMessageThreadId !== null,
       },
       brokerMetrics: this.sysMetrics.getSnapshot(),
       importantPatterns: this.getImportantPatterns(),
@@ -333,68 +339,177 @@ export class MqttMonitor extends EventEmitter {
   }
 
   private async checkImportantTopics(): Promise<void> {
-    const snapshot = this.getSnapshot();
+    if (this.checkingImportantTopics) return;
+    this.checkingImportantTopics = true;
 
-    for (const topic of snapshot.important) {
-      const previous = this.importantStates.get(topic.topic);
-      const isDead = topic.state === 'dead';
-      const recovered = previous?.state === 'dead' && topic.state === 'alive';
+    try {
+      const snapshot = this.getSnapshot();
 
-      if (isDead && !previous?.alertSent) {
-        await this.createAlert(topic, this.formatAlertMessage(topic, 'dead'));
-        this.importantStates.set(topic.topic, { state: topic.state, alertSent: true });
-        continue;
+      for (const topic of this.getAlertCandidates(snapshot)) {
+        const previous = this.importantStates.get(topic.topic);
+        const isDead = topic.state === 'dead';
+        const recovered = previous?.alertSent === true && topic.state === 'alive';
+
+        if (isDead && !previous?.alertSent) {
+          const outageStartedAt = topic.lastSeenAt
+            ? Date.parse(topic.lastSeenAt)
+            : this.startedAt;
+          await this.createAlert(topic, 'dead', outageStartedAt);
+          this.importantStates.set(topic.topic, {
+            state: topic.state,
+            alertSent: true,
+            outageStartedAt,
+          });
+          continue;
+        }
+
+        if (recovered) {
+          await this.createAlert(topic, 'recovered', previous.outageStartedAt);
+          this.importantStates.set(topic.topic, {
+            state: topic.state,
+            alertSent: false,
+            outageStartedAt: null,
+          });
+          continue;
+        }
+
+        this.importantStates.set(topic.topic, {
+          state: topic.state,
+          alertSent: previous?.alertSent && topic.state !== 'alive' ? true : false,
+          outageStartedAt: previous?.outageStartedAt ?? null,
+        });
       }
-
-      if (recovered) {
-        await this.createAlert(topic, this.formatAlertMessage(topic, 'recovered'));
-        this.importantStates.set(topic.topic, { state: topic.state, alertSent: false });
-        continue;
-      }
-
-      this.importantStates.set(topic.topic, {
-        state: topic.state,
-        alertSent: previous?.alertSent && topic.state !== 'alive' ? true : false,
-      });
+    } finally {
+      this.checkingImportantTopics = false;
     }
   }
 
-  private formatAlertMessage(topic: TopicStatus, event: 'dead' | 'recovered'): string {
+  private getAlertCandidates(snapshot: MonitorSnapshot): TopicStatus[] {
+    const topicsByName = new Map(snapshot.topics.map((topic) => [topic.topic, topic]));
+    const expectationsByPattern = new Map(
+      snapshot.important
+        .filter((topic) => topic.isExpectation)
+        .map((topic) => [topic.topic, topic]),
+    );
+    const candidates: TopicStatus[] = [];
+
+    for (const pattern of this.getImportantPatterns()) {
+      const expectation = this.config.importantTopicExpectations[pattern];
+      const materializedTopics = expectation?.expectedItems
+        .map((item) => this.materializeExpectedTopic(pattern, item))
+        .filter((topic): topic is string => topic !== null) ?? [];
+
+      if (materializedTopics.length > 0) {
+        for (const topicName of materializedTopics) {
+          const observed = topicsByName.get(topicName);
+          candidates.push(observed ?? this.createMissingTopicStatus(topicName, pattern));
+        }
+        continue;
+      }
+
+      const configured = expectationsByPattern.get(pattern);
+      if (configured) candidates.push(configured);
+    }
+
+    return candidates.filter(
+      (topic, index, list) => list.findIndex((item) => item.topic === topic.topic) === index,
+    );
+  }
+
+  private materializeExpectedTopic(pattern: string, expectedItem: string): string | null {
+    const parts = pattern.split('/');
+    const wildcardIndexes = parts
+      .map((part, index) => (part === '+' ? index : -1))
+      .filter((index) => index >= 0);
+
+    if (wildcardIndexes.length !== 1 || parts.includes('#')) return null;
+
+    parts[wildcardIndexes[0]] = expectedItem;
+    return parts.join('/');
+  }
+
+  private createMissingTopicStatus(topic: string, matchedPattern: string): TopicStatus {
+    const now = Date.now();
+    return {
+      topic,
+      important: true,
+      matchedPattern,
+      state: now - this.startedAt > this.config.deadMs ? 'dead' : 'silent',
+      messageCount: 0,
+      bytesTotal: 0,
+      bytesPerMinute: 0,
+      ratePerMinute: 0,
+      lastSeenAt: null,
+      lastPayloadPreview: '',
+      isExpectation: true,
+      expectedCount: 1,
+      activeCount: 0,
+      countLabel: 'источник',
+    };
+  }
+
+  private formatAlertMessage(
+    topic: TopicStatus,
+    event: 'dead' | 'recovered',
+    outageStartedAt: number | null,
+  ): string {
     const now = Date.now();
     const lastSeenAt = topic.lastSeenAt ? Date.parse(topic.lastSeenAt) : null;
     const silenceSeconds = lastSeenAt ? Math.max(0, Math.round((now - lastSeenAt) / 1000)) : null;
-    const title = event === 'dead' ? 'MQTT поток остановился' : 'MQTT поток восстановился';
+    const outageDurationSeconds = event === 'recovered' && outageStartedAt
+      ? Math.max(0, Math.round((now - outageStartedAt) / 1_000))
+      : null;
+    const title = event === 'dead' ? '🔴 MQTT-поток остановился' : '🟢 MQTT-поток восстановился';
+    const source = topic.topic.split('/').at(-1) ?? topic.topic;
 
     return [
       title,
+      '',
+      `Источник: ${source}`,
       `Топик: ${topic.topic}`,
-      `Статус: ${topic.state}`,
-      `Важный шаблон: ${topic.matchedPattern ?? topic.topic}`,
+      `Брокер: ${this.publicBrokerUrl()}`,
       `Последнее сообщение: ${topic.lastSeenAt ? new Date(topic.lastSeenAt).toLocaleString('ru-RU') : 'не было'}`,
-      `Молчание: ${silenceSeconds === null ? 'нет данных' : `${silenceSeconds} сек.`}`,
-      `Порог dead: ${Math.round(this.config.deadMs / 1000)} сек.`,
-      `Сообщений всего: ${topic.messageCount}`,
-      `Скорость сейчас: ${topic.ratePerMinute}/мин`,
+      event === 'dead'
+        ? `Нет данных: ${silenceSeconds === null ? 'с момента запуска монитора' : `${silenceSeconds} сек.`}`
+        : `Продолжительность простоя: ${outageDurationSeconds ?? 0} сек.`,
       `Время события: ${new Date(now).toLocaleString('ru-RU')}`,
     ].join('\n');
   }
 
-  private async createAlert(topic: TopicStatus, message: string): Promise<void> {
+  private async createAlert(
+    topic: TopicStatus,
+    event: 'dead' | 'recovered',
+    outageStartedAt: number | null,
+  ): Promise<void> {
+    const now = Date.now();
+    const lastSeenAt = topic.lastSeenAt ? Date.parse(topic.lastSeenAt) : null;
+    const message = this.formatAlertMessage(topic, event, outageStartedAt);
     const alert: AlertEvent = {
-      id: `${Date.now()}-${topic.topic}`,
+      id: `${now}-${topic.topic}`,
       topic: topic.topic,
       state: topic.state,
+      event,
       message,
       createdAt: new Date().toISOString(),
+      silenceSeconds: lastSeenAt ? Math.max(0, Math.round((now - lastSeenAt) / 1_000)) : null,
+      outageDurationSeconds: event === 'recovered' && outageStartedAt
+        ? Math.max(0, Math.round((now - outageStartedAt) / 1_000))
+        : null,
+      deliveryStatus: 'pending',
+      deliveryError: null,
     };
 
     this.alerts.push(alert);
     this.emitUpdate();
 
     try {
-      await this.notifier.send(message);
+      alert.deliveryStatus = await this.notifier.send(message);
     } catch (error) {
-      console.error('matrix.alert_error', error);
+      alert.deliveryStatus = 'failed';
+      alert.deliveryError = error instanceof Error ? error.message : String(error);
+      console.error('telegram.alert_error', error);
+    } finally {
+      this.emitUpdate();
     }
   }
 

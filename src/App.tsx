@@ -1,10 +1,10 @@
 import {
   AlertTriangle,
-  Bell,
   CheckCircle2,
   Database,
   Layers3,
   RadioTower,
+  Send,
   Shield,
   Wifi,
   WifiOff,
@@ -13,19 +13,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { getSnapshot, subscribeSnapshot } from './api';
 import { BrokerOverview } from './components/BrokerOverview';
 import { ImportantStreams } from './components/ImportantStreams';
-import { MatrixAlertsView } from './components/MatrixAlertsView';
+import { TelegramAlertsView } from './components/TelegramAlertsView';
 import { StatCard } from './components/StatCard';
 import { TopicExplorer } from './components/TopicExplorer';
 import { formatUptime } from './format';
 import type { MonitorSnapshot } from './types';
 
-type Section = 'broker' | 'topics' | 'important' | 'matrix';
+type Section = 'broker' | 'topics' | 'important' | 'telegram';
 
 const sectionTitles: Record<Section, string> = {
   broker: 'Брокер',
   topics: 'Топики',
   important: 'Важные потоки',
-  matrix: 'Matrix-алерты',
+  telegram: 'Telegram',
 };
 
 export function App() {
@@ -103,9 +103,9 @@ export function App() {
             <Shield size={16} />
             Важные потоки
           </button>
-          <button className={section === 'matrix' ? 'sidebar-nav__item--active' : ''} onClick={() => setSection('matrix')} type="button">
-            <Bell size={16} />
-            Matrix-алерты
+          <button className={section === 'telegram' ? 'sidebar-nav__item--active' : ''} onClick={() => setSection('telegram')} type="button">
+            <Send size={16} />
+            Telegram
           </button>
         </nav>
 
@@ -154,7 +154,7 @@ export function App() {
         {section === 'broker' && <BrokerOverview snapshot={snapshot} />}
         {section === 'topics' && <TopicExplorer snapshot={snapshot} onSnapshot={setSnapshot} />}
         {section === 'important' && <ImportantStreams snapshot={snapshot} />}
-        {section === 'matrix' && <MatrixAlertsView snapshot={snapshot} />}
+        {section === 'telegram' && <TelegramAlertsView snapshot={snapshot} />}
 
         <footer className="footer">
           <div>

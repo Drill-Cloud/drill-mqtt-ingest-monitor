@@ -1,6 +1,6 @@
 # MQTT Monitor
 
-Монитор Mosquitto: показывает увиденные MQTT-топики, состояние важных потоков и отправляет Matrix-алерты при остановке данных.
+Монитор Mosquitto: показывает увиденные MQTT-топики, состояние важных потоков и отправляет Telegram-уведомления при остановке данных.
 
 ## Что умеет
 
@@ -17,7 +17,7 @@
   - общий счетчик сообщений и объем данных;
   - последние алерты.
 - Позволяет добавить новый важный топик прямо из UI. Такие добавления живут до перезапуска процесса; постоянные важные топики задаются через `IMPORTANT_TOPICS`.
-- Может отправлять сообщение в Matrix при переходе важного потока в `dead` и при восстановлении.
+- Может отправлять сообщение в Telegram при переходе ожидаемого потока в `dead` и при восстановлении.
 
 Важно: MQTT broker не хранит список всех когда-либо существовавших топиков. Монитор видит только те топики, по которым пришли сообщения после запуска, плюс заранее заданные важные шаблоны.
 
@@ -62,10 +62,11 @@ TOPIC_STALE_MS=15000
 TOPIC_DEAD_MS=45000
 ACTIVITY_LOG_INTERVAL_MS=60000
 
-MATRIX_ENABLED=false
-MATRIX_HOMESERVER=https://matrix.greact.online
-MATRIX_ROOM_ID=
-MATRIX_ACCESS_TOKEN=
+TELEGRAM_ENABLED=false
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+TELEGRAM_CHANNEL_NAME=drillcloud.health
+TELEGRAM_MESSAGE_THREAD_ID=
 ```
 
 `MQTT_URL` — обязательная переменная. У монитора нет брокера по умолчанию.
@@ -171,17 +172,24 @@ mosquitto_sub -h mosquitto -p 1883 -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" \
 
 Если `$SYS` приходит, а `data/edge5/...` нет — брокер и ACL работают, проблема находится на стороне publisher/Node-RED либо выбран не тот broker. Если не приходит даже `$SYS`, нужно проверять адрес, сеть, listener, логин и ACL.
 
-## Matrix
+## Telegram
 
 Чтобы включить алерты:
 
 ```env
-MATRIX_ENABLED=true
-MATRIX_ROOM_ID=!room-id:matrix.greact.online
-MATRIX_ACCESS_TOKEN=<access-token>
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=<bot-token>
+TELEGRAM_CHAT_ID=442208393
+TELEGRAM_CHANNEL_NAME=drillcloud.health
 ```
 
-Сообщения отправляются в формате обычного `m.text`.
+`TELEGRAM_BOT_TOKEN` хранится только в backend environment/Portainer secret и не должен иметь префикс `VITE_`.
+
+Положительный `TELEGRAM_CHAT_ID`, например `442208393`, обозначает личный чат. Для отправки именно в канал нужно добавить бота администратором с правом публикации и задать ID канала вида `-100...` либо его публичный `@username`. `TELEGRAM_CHANNEL_NAME` используется только как понятное название получателя в интерфейсе.
+
+Если уведомления отправляются в отдельную тему Telegram-группы, дополнительно задаётся `TELEGRAM_MESSAGE_THREAD_ID`.
+
+Монитор даёт ожидаемым потокам время `TOPIC_DEAD_MS` на появление после запуска. Затем отправляет один алерт об отсутствии данных. Повторных сообщений во время того же простоя нет; после возобновления потока отправляется отдельное уведомление о восстановлении. Для wildcard-видеопотока контролируется каждая камера из `EDGE5_VIDEO_IMPORTANT_CAMERAS`, поэтому остановка одной камеры не скрывается активностью остальных.
 
 ## Production build
 

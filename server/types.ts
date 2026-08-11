@@ -31,15 +31,22 @@ export type AlertEvent = {
   id: string;
   topic: string;
   state: TopicState;
+  event: 'dead' | 'recovered';
   message: string;
   createdAt: string;
+  silenceSeconds: number | null;
+  outageDurationSeconds: number | null;
+  deliveryStatus: 'pending' | 'sent' | 'failed' | 'disabled';
+  deliveryError: string | null;
 };
 
-export type MatrixStatus = {
+export type TelegramStatus = {
   enabled: boolean;
-  homeserver: string;
-  roomConfigured: boolean;
-  accessTokenConfigured: boolean;
+  ready: boolean;
+  recipient: string;
+  chatConfigured: boolean;
+  botTokenConfigured: boolean;
+  messageThreadConfigured: boolean;
 };
 
 export type BrokerMetrics = {
@@ -89,7 +96,7 @@ export type MonitorSnapshot = {
   connected: boolean;
   startedAt: string;
   now: string;
-  matrix: MatrixStatus;
+  telegram: TelegramStatus;
   brokerMetrics: BrokerMetrics;
   importantPatterns: string[];
   staleMs: number;
