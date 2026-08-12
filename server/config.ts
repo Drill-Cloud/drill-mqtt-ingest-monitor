@@ -1,105 +1,74 @@
+export type TelegramConfig = {
+  apiId: number;
+  apiHash: string;
+  botToken: string;
+  chatId: string;
+  proxyHost: string;
+  proxyPort: number;
+  proxySecret: string;
+};
+
 export type AppConfig = {
   httpPort: number;
-  mqttUrl: string;
-  mqttUsername?: string;
-  mqttPassword?: string;
+  mqtt: {
+    url: string;
+    username?: string;
+    password?: string;
+  };
   importantTopics: string[];
-  importantTopicExpectations: Record<string, ImportantTopicExpectation>;
-  staleMs: number;
-  deadMs: number;
-  activityLogIntervalMs: number;
-  telegramEnabled: boolean;
-  telegramBotToken: string;
-  telegramChatId: string;
-  telegramChannelName: string;
-  telegramMessageThreadId: number | null;
+  importantCameras: string[];
+  silenceMs: number;
+  telegram: TelegramConfig | null;
 };
 
-export type ImportantTopicExpectation = {
-  expectedItems: string[];
-  countLabel: string;
-};
-
-const DEFAULT_EDGE5_MODBUS_IMPORTANT_TAGS = [
-  'edge5-v3-wk',
-  'edge5-v3-hk',
-  'edge5-v3-vw',
-  'edge5-v3-pdk',
-  'edge5-v3-h2s',
-  'edge5-v3-nrot',
-  'edge5-v3-vsp',
-];
-
-const DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS = ['camera-11', 'camera-12', 'camera-13'];
-
-function readRequiredString(name: string): string {
+function required(name: string): string {
   const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(`${name} is required`);
-  }
-
+  if (!value) throw new Error(`${name} is required`);
   return value;
 }
 
-function readNumber(name: string, fallback: number): number {
-  const value = process.env[name];
+function positiveNumber(name: string, fallback?: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw && fallback !== undefined) return fallback;
 
-  if (!value) {
-    return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number`);
   }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return value;
 }
 
-function readOptionalNumber(name: string): number | null {
-  const value = process.env[name]?.trim();
-  if (!value) return null;
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? parsed : null;
+function list(name: string, fallback: string[] = []): string[] {
+  const raw = process.env[name];
+  const values = raw === undefined ? fallback : raw.split(',');
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function readList(name: string, fallback: string[]): string[] {
-  const value = process.env[name];
+function readTelegramConfig(): TelegramConfig | null {
+  if (process.env.TELEGRAM_ENABLED !== 'true') return null;
 
-  if (!value) {
-    return [...new Set(fallback)];
-  }
-
-  const items = value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return [...new Set(items)];
+  return {
+    apiId: positiveNumber('TELEGRAM_API_ID'),
+    apiHash: required('TELEGRAM_API_HASH'),
+    botToken: required('TELEGRAM_BOT_TOKEN'),
+    chatId: required('TELEGRAM_CHAT_ID'),
+    proxyHost: required('TELEGRAM_PROXY_HOST'),
+    proxyPort: positiveNumber('TELEGRAM_PROXY_PORT'),
+    proxySecret: required('TELEGRAM_PROXY_SECRET'),
+  };
 }
 
 export function readConfig(): AppConfig {
   return {
-    httpPort: readNumber('HTTP_PORT', 3205),
-    mqttUrl: readRequiredString('MQTT_URL'),
-    mqttUsername: process.env.MQTT_USERNAME,
-    mqttPassword: process.env.MQTT_PASSWORD,
-    importantTopics: readList('IMPORTANT_TOPICS', ['data/edge5/video/v2/+', 'data/edge5/modbus/v3']),
-    importantTopicExpectations: {
-      'data/edge5/modbus/v3': {
-        expectedItems: readList('EDGE5_MODBUS_IMPORTANT_TAGS', DEFAULT_EDGE5_MODBUS_IMPORTANT_TAGS),
-        countLabel: 'тегов',
-      },
-      'data/edge5/video/v2/+': {
-        expectedItems: readList('EDGE5_VIDEO_IMPORTANT_CAMERAS', DEFAULT_EDGE5_VIDEO_IMPORTANT_CAMERAS),
-        countLabel: 'камер',
-      },
+    httpPort: positiveNumber('HTTP_PORT', 3205),
+    mqtt: {
+      url: required('MQTT_URL'),
+      username: process.env.MQTT_USERNAME?.trim() || undefined,
+      password: process.env.MQTT_PASSWORD || undefined,
     },
-    staleMs: readNumber('TOPIC_STALE_MS', 15_000),
-    deadMs: readNumber('TOPIC_DEAD_MS', 45_000),
-    activityLogIntervalMs: readNumber('ACTIVITY_LOG_INTERVAL_MS', 60_000),
-    telegramEnabled: process.env.TELEGRAM_ENABLED === 'true',
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() ?? '',
-    telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim() ?? '',
-    telegramChannelName: process.env.TELEGRAM_CHANNEL_NAME?.trim() ?? '',
-    telegramMessageThreadId: readOptionalNumber('TELEGRAM_MESSAGE_THREAD_ID'),
+    importantTopics: list('IMPORTANT_TOPICS'),
+    importantCameras: list('IMPORTANT_CAMERAS'),
+    silenceMs: positiveNumber('TOPIC_SILENCE_MS', 45_000),
+    telegram: readTelegramConfig(),
   };
 }

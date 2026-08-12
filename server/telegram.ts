@@ -1,84 +1,62 @@
-import type { AppConfig } from './config.js';
+import { sessions, TelegramClient, utils } from 'teleproto';
+import type { TelegramConfig } from './config.js';
+import type { Notifier } from './alerts.js';
 
-const SEND_ATTEMPTS = 3;
-const REQUEST_TIMEOUT_MS = 5_000;
-const RETRY_DELAY_MS = 600;
+type MessageTarget = { send(message: string): Promise<unknown> };
 
-type TelegramErrorResponse = {
-  description?: string;
-  parameters?: {
-    retry_after?: number;
-  };
-};
+export class TelegramNotifier implements Notifier {
+  private client: TelegramClient | null = null;
+  private target: MessageTarget | null = null;
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
+  constructor(private readonly config: TelegramConfig) {}
 
-export class TelegramNotifier {
-  constructor(private readonly config: AppConfig) {}
+  async send(message: string): Promise<void> {
+    try {
+      const target = await this.connect();
+      await target.send(message);
+    } catch (error) {
+      await this.disconnect();
+      throw error;
+    }
+  }
 
-  async send(message: string): Promise<'disabled' | 'sent'> {
-    if (!this.config.telegramEnabled) {
-      return 'disabled';
+  async disconnect(): Promise<void> {
+    await this.client?.disconnect().catch(() => undefined);
+    this.client = null;
+    this.target = null;
+  }
+
+  private async connect(): Promise<MessageTarget> {
+    if (this.target) return this.target;
+
+    const client = new TelegramClient(
+      new sessions.StringSession(''),
+      this.config.apiId,
+      this.config.apiHash,
+      {
+        connectionRetries: 5,
+        proxy: {
+          ip: this.config.proxyHost,
+          port: this.config.proxyPort,
+          MTProxy: true,
+          secret: this.config.proxySecret,
+          timeout: 10,
+        },
+      },
+    );
+
+    await client.start({ botAuthToken: this.config.botToken });
+
+    // Для MTProto нужен хеш доступа канала; загрузка диалогов находит его по числовому ID Bot API.
+    const dialogs = await client.getDialogs({ limit: 200 });
+    const target = dialogs.find((dialog) => utils.getPeerId(dialog.inputEntity) === this.config.chatId);
+    if (!target) {
+      await client.disconnect();
+      throw new Error(`Telegram chat ${this.config.chatId} is not available to the bot`);
     }
 
-    if (!this.config.telegramBotToken) {
-      throw new Error('TELEGRAM_BOT_TOKEN is not configured');
-    }
-
-    if (!this.config.telegramChatId) {
-      throw new Error('TELEGRAM_CHAT_ID is not configured');
-    }
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= SEND_ATTEMPTS; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-      try {
-        const response = await fetch(
-          `https://api.telegram.org/bot${this.config.telegramBotToken}/sendMessage`,
-          {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify({
-              chat_id: this.config.telegramChatId,
-              text: message,
-              message_thread_id: this.config.telegramMessageThreadId ?? undefined,
-            }),
-            signal: controller.signal,
-          },
-        );
-
-        const body = await response.json().catch(() => ({})) as TelegramErrorResponse;
-        if (response.ok) {
-          return 'sent';
-        }
-
-        lastError = new Error(body.description || `Telegram returned ${response.status}`);
-        const retryable = response.status === 429 || response.status >= 500;
-        if (!retryable || attempt === SEND_ATTEMPTS) {
-          break;
-        }
-
-        const retryAfterMs = body.parameters?.retry_after
-          ? body.parameters.retry_after * 1_000
-          : RETRY_DELAY_MS * attempt;
-        await wait(retryAfterMs);
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        if (attempt < SEND_ATTEMPTS) {
-          await wait(RETRY_DELAY_MS * attempt);
-        }
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-
-    throw lastError ?? new Error('Telegram delivery failed');
+    this.client = client;
+    this.target = target;
+    return target;
   }
 }
