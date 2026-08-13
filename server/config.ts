@@ -1,53 +1,74 @@
-export type AppConfig = {
-  httpPort: number;
-  mqttUrl: string;
-  mqttUsername?: string;
-  mqttPassword?: string;
-  importantTopics: string[];
-  staleMs: number;
-  deadMs: number;
-  matrixEnabled: boolean;
-  matrixHomeserver: string;
-  matrixRoomId: string;
-  matrixAccessToken: string;
+export type TelegramConfig = {
+  apiId: number;
+  apiHash: string;
+  botToken: string;
+  chatId: string;
+  proxyHost: string;
+  proxyPort: number;
+  proxySecret: string;
 };
 
-function readNumber(name: string, fallback: number): number {
-  const value = process.env[name];
+export type AppConfig = {
+  httpPort: number;
+  mqtt: {
+    url: string;
+    username?: string;
+    password?: string;
+  };
+  importantTopics: string[];
+  importantCameras: string[];
+  silenceMs: number;
+  telegram: TelegramConfig | null;
+};
 
-  if (!value) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function required(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required`);
+  return value;
 }
 
-function readList(name: string, fallback: string[]): string[] {
-  const value = process.env[name];
+function positiveNumber(name: string, fallback?: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw && fallback !== undefined) return fallback;
 
-  if (!value) {
-    return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number`);
   }
+  return value;
+}
 
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
+function list(name: string, fallback: string[] = []): string[] {
+  const raw = process.env[name];
+  const values = raw === undefined ? fallback : raw.split(',');
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function readTelegramConfig(): TelegramConfig | null {
+  if (process.env.TELEGRAM_ENABLED !== 'true') return null;
+
+  return {
+    apiId: positiveNumber('TELEGRAM_API_ID'),
+    apiHash: required('TELEGRAM_API_HASH'),
+    botToken: required('TELEGRAM_BOT_TOKEN'),
+    chatId: required('TELEGRAM_CHAT_ID'),
+    proxyHost: required('TELEGRAM_PROXY_HOST'),
+    proxyPort: positiveNumber('TELEGRAM_PROXY_PORT'),
+    proxySecret: required('TELEGRAM_PROXY_SECRET'),
+  };
 }
 
 export function readConfig(): AppConfig {
   return {
-    httpPort: readNumber('HTTP_PORT', 3205),
-    mqttUrl: process.env.MQTT_URL ?? 'mqtt://194.36.208.86:1883',
-    mqttUsername: process.env.MQTT_USERNAME,
-    mqttPassword: process.env.MQTT_PASSWORD,
-    importantTopics: readList('IMPORTANT_TOPICS', ['data/edge5/video/v2/+', 'data/edge5/modbus/v3']),
-    staleMs: readNumber('TOPIC_STALE_MS', 15_000),
-    deadMs: readNumber('TOPIC_DEAD_MS', 45_000),
-    matrixEnabled: process.env.MATRIX_ENABLED === 'true',
-    matrixHomeserver: process.env.MATRIX_HOMESERVER ?? 'https://matrix.greact.online',
-    matrixRoomId: process.env.MATRIX_ROOM_ID ?? '',
-    matrixAccessToken: process.env.MATRIX_ACCESS_TOKEN ?? '',
+    httpPort: positiveNumber('HTTP_PORT', 3205),
+    mqtt: {
+      url: required('MQTT_URL'),
+      username: process.env.MQTT_USERNAME?.trim() || undefined,
+      password: process.env.MQTT_PASSWORD || undefined,
+    },
+    importantTopics: list('IMPORTANT_TOPICS'),
+    importantCameras: list('IMPORTANT_CAMERAS'),
+    silenceMs: positiveNumber('TOPIC_SILENCE_MS', 45_000),
+    telegram: readTelegramConfig(),
   };
 }
