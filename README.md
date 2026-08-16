@@ -32,28 +32,21 @@ TOPIC_SILENCE_MS=45000
 
 Старые переменные `EDGE5_MODBUS_IMPORTANT_TAGS`, `EDGE5_VIDEO_IMPORTANT_CAMERAS`, `TOPIC_STALE_MS` и `TOPIC_DEAD_MS` больше не используются. Монитор контролирует топики и камеры, а не содержимое или теги внутри сообщений.
 
-## Telegram через MTProxy
+## Telegram через SOCKS5
 
 Telegram необязателен. При остановке важного канала отправляется одно уведомление, после восстановления — ещё одно. Ошибка Telegram не влияет на MQTT-монитор и API.
 
 ```env
 TELEGRAM_ENABLED=true
-TELEGRAM_API_ID=<api-id с my.telegram.org>
-TELEGRAM_API_HASH=<api-hash с my.telegram.org>
 TELEGRAM_BOT_TOKEN=<токен BotFather>
 TELEGRAM_CHAT_ID=-1000000000000
-TELEGRAM_PROXY_HOST=proxy.example.com
-TELEGRAM_PROXY_PORT=8443
-TELEGRAM_PROXY_SECRET=<mtproxy-secret>
+TELEGRAM_SOCKS_HOST=proxy.example.com
+TELEGRAM_SOCKS_PORT=1080
+TELEGRAM_SOCKS_USERNAME=mqttmonitor
+TELEGRAM_SOCKS_PASSWORD=<пароль>
 ```
 
-MTProxy работает по MTProto, поэтому кроме токена бота нужны `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. Бот должен состоять в целевом канале и иметь право публиковать сообщения.
-
-Ссылка MTProxy раскладывается по переменным так:
-
-```text
-tg://proxy?server=<TELEGRAM_PROXY_HOST>&port=<TELEGRAM_PROXY_PORT>&secret=<TELEGRAM_PROXY_SECRET>
-```
+Монитор вызывает Telegram Bot API через SOCKS5. `api_id`, `api_hash` и MTProxy secret не нужны. Бот должен состоять в целевом канале и иметь право публиковать сообщения. Доступ к SOCKS5 следует ограничить внешним IP сервера монитора.
 
 После заполнения `.env` отправьте одно реальное тестовое сообщение:
 
@@ -61,7 +54,7 @@ tg://proxy?server=<TELEGRAM_PROXY_HOST>&port=<TELEGRAM_PROXY_PORT>&secret=<TELEG
 npm run test:telegram
 ```
 
-Успешная команда выведет ID чата. Значения токена, `api_hash` и proxy secret приложение не печатает.
+Успешная команда выведет ID чата. Значения токена и пароля прокси приложение не печатает.
 
 ## Read-only ACL
 

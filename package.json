@@ -18,7 +18,7 @@
     "mqtt": "^5.10.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "teleproto": "^1.228.5"
+    "socks-proxy-agent": "^8.0.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
