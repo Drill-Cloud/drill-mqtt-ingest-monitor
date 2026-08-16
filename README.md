@@ -49,6 +49,20 @@ TELEGRAM_PROXY_SECRET=<mtproxy-secret>
 
 MTProxy работает по MTProto, поэтому кроме токена бота нужны `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. Бот должен состоять в целевом канале и иметь право публиковать сообщения.
 
+Ссылка MTProxy раскладывается по переменным так:
+
+```text
+tg://proxy?server=<TELEGRAM_PROXY_HOST>&port=<TELEGRAM_PROXY_PORT>&secret=<TELEGRAM_PROXY_SECRET>
+```
+
+После заполнения `.env` отправьте одно реальное тестовое сообщение:
+
+```bash
+npm run test:telegram
+```
+
+Успешная команда выведет ID чата. Значения токена, `api_hash` и proxy secret приложение не печатает.
+
 ## Read-only ACL
 
 Окончательно запретите запись на стороне брокера отдельной учётной записью:

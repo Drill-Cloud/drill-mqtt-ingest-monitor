@@ -44,7 +44,7 @@ function list(name: string, fallback: string[] = []): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function readTelegramConfig(): TelegramConfig | null {
+export function readTelegramConfig(): TelegramConfig | null {
   if (process.env.TELEGRAM_ENABLED !== 'true') return null;
 
   return {
