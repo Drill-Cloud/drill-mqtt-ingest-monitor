@@ -1,11 +1,10 @@
 export type TelegramConfig = {
-  apiId: number;
-  apiHash: string;
   botToken: string;
   chatId: string;
-  proxyHost: string;
-  proxyPort: number;
-  proxySecret: string;
+  socksHost: string;
+  socksPort: number;
+  socksUsername: string;
+  socksPassword: string;
 };
 
 export type AppConfig = {
@@ -48,13 +47,12 @@ export function readTelegramConfig(): TelegramConfig | null {
   if (process.env.TELEGRAM_ENABLED !== 'true') return null;
 
   return {
-    apiId: positiveNumber('TELEGRAM_API_ID'),
-    apiHash: required('TELEGRAM_API_HASH'),
     botToken: required('TELEGRAM_BOT_TOKEN'),
     chatId: required('TELEGRAM_CHAT_ID'),
-    proxyHost: required('TELEGRAM_PROXY_HOST'),
-    proxyPort: positiveNumber('TELEGRAM_PROXY_PORT'),
-    proxySecret: required('TELEGRAM_PROXY_SECRET'),
+    socksHost: required('TELEGRAM_SOCKS_HOST'),
+    socksPort: positiveNumber('TELEGRAM_SOCKS_PORT'),
+    socksUsername: required('TELEGRAM_SOCKS_USERNAME'),
+    socksPassword: required('TELEGRAM_SOCKS_PASSWORD'),
   };
 }
 

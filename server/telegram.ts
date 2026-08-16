@@ -1,88 +1,83 @@
-import { sessions, TelegramClient, utils } from 'teleproto';
+import https from 'node:https';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 import type { TelegramConfig } from './config.js';
 import type { Notifier } from './alerts.js';
 
-type MessageTarget = { send(message: string): Promise<unknown> };
+type TelegramResponse = {
+  ok: boolean;
+  description?: string;
+};
 
 export class TelegramNotifier implements Notifier {
-  private client: TelegramClient | null = null;
-  private target: MessageTarget | null = null;
-  private connectionPromise: Promise<MessageTarget> | null = null;
+  private readonly agent: SocksProxyAgent;
   private sendQueue: Promise<void> = Promise.resolve();
 
-  constructor(private readonly config: TelegramConfig) {}
+  constructor(private readonly config: TelegramConfig) {
+    const proxy = new URL(`socks5h://${config.socksHost}:${config.socksPort}`);
+    proxy.username = config.socksUsername;
+    proxy.password = config.socksPassword;
+    this.agent = new SocksProxyAgent(proxy, { keepAlive: true });
+  }
 
   send(message: string): Promise<void> {
-    // Telegram принимает сообщения последовательно через одно MTProto-соединение.
+    // Последовательная очередь сохраняет порядок алертов при частых изменениях состояния.
     const task = this.sendQueue.then(() => this.sendNow(message));
     this.sendQueue = task.catch(() => undefined);
     return task;
   }
 
   async disconnect(): Promise<void> {
-    const client = this.client;
-    this.client = null;
-    this.target = null;
-    this.connectionPromise = null;
-    await client?.disconnect().catch(() => undefined);
+    this.agent.destroy();
   }
 
-  private async sendNow(message: string): Promise<void> {
-    try {
-      const target = await this.connect();
-      await target.send(message);
-    } catch (error) {
-      await this.disconnect();
-      throw error;
-    }
-  }
-
-  private connect(): Promise<MessageTarget> {
-    if (this.target) return Promise.resolve(this.target);
-    if (this.connectionPromise) return this.connectionPromise;
-
-    this.connectionPromise = this.openConnection().finally(() => {
-      this.connectionPromise = null;
+  private sendNow(message: string): Promise<void> {
+    return this.request('sendMessage', {
+      chat_id: this.config.chatId,
+      text: message,
     });
-    return this.connectionPromise;
   }
 
-  private async openConnection(): Promise<MessageTarget> {
-    const client = new TelegramClient(
-      new sessions.StringSession(''),
-      this.config.apiId,
-      this.config.apiHash,
-      {
-        connectionRetries: 5,
-        proxy: {
-          ip: this.config.proxyHost,
-          port: this.config.proxyPort,
-          MTProxy: true,
-          secret: this.config.proxySecret,
-          timeout: 10,
+  private request(method: string, payload: Record<string, string>): Promise<void> {
+    const body = JSON.stringify(payload);
+
+    return new Promise((resolve, reject) => {
+      const request = https.request({
+        hostname: 'api.telegram.org',
+        port: 443,
+        path: `/bot${this.config.botToken}/${method}`,
+        method: 'POST',
+        agent: this.agent,
+        headers: {
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
         },
-      },
-    );
-    this.client = client;
+      }, (response) => {
+        let responseBody = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => {
+          responseBody += chunk;
+        });
+        response.on('end', () => {
+          try {
+            const result = JSON.parse(responseBody) as TelegramResponse;
+            if (!result.ok) {
+              reject(new Error(`Telegram API error: ${result.description ?? 'unknown error'}`));
+              return;
+            }
+            resolve();
+          } catch (error) {
+            reject(new Error(`Telegram returned an invalid response (HTTP ${response.statusCode ?? 0})`, {
+              cause: error,
+            }));
+          }
+        });
+      });
 
-    try {
-      await client.start({ botAuthToken: this.config.botToken });
-
-      // Для MTProto нужен хеш доступа канала; диалоги позволяют найти его по ID из Bot API.
-      const dialogs = await client.getDialogs({ limit: 200 });
-      const target = dialogs.find(
-        (dialog) => utils.getPeerId(dialog.inputEntity) === this.config.chatId,
-      );
-      if (!target) {
-        throw new Error(`Telegram chat ${this.config.chatId} is not available to the bot`);
-      }
-
-      this.target = target;
-      return target;
-    } catch (error) {
-      await client.disconnect();
-      if (this.client === client) this.client = null;
-      throw error;
-    }
+      request.setTimeout(15_000, () => {
+        request.destroy(new Error('Telegram request timed out'));
+      });
+      request.on('error', reject);
+      request.end(body);
+    });
   }
 }
