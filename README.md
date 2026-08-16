@@ -1,95 +1,85 @@
 # MQTT Monitor
 
-Монитор Mosquitto: показывает увиденные MQTT-топики, состояние важных потоков и отправляет Matrix-алерты при остановке данных.
+Read-only монитор MQTT-шины. Один экран отвечает на четыре вопроса:
 
-## Что умеет
+1. доступен ли брокер;
+2. идут ли данные через шину сейчас;
+3. в каких топиках есть публикации;
+4. работают ли важные топики и камеры.
 
-- Подключается к broker `mqtt://194.36.208.86:1883`.
-- Подписывается на `#` и видит все топики, в которые приходят сообщения после старта монитора.
-- Отдельно отслеживает важные потоки:
-  - `data/edge5/video/v2/+`
-  - `data/edge5/modbus/v3`
-- Показывает:
-  - alive / stale / dead / silent;
-  - последнее сообщение;
-  - последние 100 сообщений по выбранному топику;
-  - скорость сообщений за минуту;
-  - общий счетчик сообщений и объем данных;
-  - последние алерты.
-- Позволяет добавить новый важный топик прямо из UI. Такие добавления живут до перезапуска процесса; постоянные важные топики задаются через `IMPORTANT_TOPICS`.
-- Может отправлять сообщение в Matrix при переходе важного потока в `dead` и при восстановлении.
-
-Важно: MQTT broker не хранит список всех когда-либо существовавших топиков. Монитор видит только те топики, по которым пришли сообщения после запуска, плюс заранее заданные важные шаблоны.
+Монитор подключается как независимый подписчик с `QoS 0` и `clean session`, подписывается на `#`, но ничего не публикует и не хранит payload. Каждый MQTT-подписчик получает собственную копию сообщения, поэтому монитор не перехватывает данные у ingest.
 
 ## Запуск
 
 ```bash
-cd C:\Users\<user>\Drill\mqtt-monitor
+cp .env.example .env
 npm install
-copy .env.example .env
 npm run dev
 ```
 
-Открыть UI:
-
-```text
-http://localhost:5174
-```
-
-Backend API:
-
-```text
-http://localhost:3205/api/snapshot
-http://localhost:3205/api/events
-http://localhost:3205/api/messages?topic=data/edge5/modbus/v3
-```
-
-## Env
+`MQTT_URL` обязателен: у приложения нет брокера по умолчанию. Для production задайте адрес конкретного брокера в окружении стека — hostname и IP поддерживаются одинаково.
 
 ```env
-HTTP_PORT=3205
-VITE_PORT=5174
-VITE_API_URL=http://localhost:3205
-
-MQTT_URL=mqtt://194.36.208.86:1883
-MQTT_USERNAME=
-MQTT_PASSWORD=
-
+MQTT_URL=mqtt://broker.example.com:1883
 IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3
-TOPIC_STALE_MS=15000
-TOPIC_DEAD_MS=45000
-
-MATRIX_ENABLED=false
-MATRIX_HOMESERVER=https://matrix.greact.online
-MATRIX_ROOM_ID=
-MATRIX_ACCESS_TOKEN=
+IMPORTANT_CAMERAS=camera-11,camera-12,camera-13
+TOPIC_SILENCE_MS=45000
 ```
 
-`IMPORTANT_TOPICS` принимает список MQTT-шаблонов через запятую. Для новых постоянных потоков достаточно добавить шаблон в эту переменную, например:
+- `IMPORTANT_TOPICS` — точные топики или MQTT-шаблоны через запятую.
+- `IMPORTANT_CAMERAS` — камеры для шаблонов вида `.../video/.../+`. Монитор разворачивает шаблон в отдельный контрольный канал для каждой камеры.
+- `TOPIC_SILENCE_MS` — время без публикаций, после которого канал считается остановленным.
+
+Старые переменные `EDGE5_MODBUS_IMPORTANT_TAGS`, `EDGE5_VIDEO_IMPORTANT_CAMERAS`, `TOPIC_STALE_MS` и `TOPIC_DEAD_MS` больше не используются. Монитор контролирует топики и камеры, а не содержимое или теги внутри сообщений.
+
+## Telegram через MTProxy
+
+Telegram необязателен. При остановке важного канала отправляется одно уведомление, после восстановления — ещё одно. Ошибка Telegram не влияет на MQTT-монитор и API.
 
 ```env
-IMPORTANT_TOPICS=data/edge5/video/v2/+,data/edge5/modbus/v3,data/edge5/custom/+
+TELEGRAM_ENABLED=true
+TELEGRAM_API_ID=<api-id с my.telegram.org>
+TELEGRAM_API_HASH=<api-hash с my.telegram.org>
+TELEGRAM_BOT_TOKEN=<токен BotFather>
+TELEGRAM_CHAT_ID=-1000000000000
+TELEGRAM_PROXY_HOST=proxy.example.com
+TELEGRAM_PROXY_PORT=8443
+TELEGRAM_PROXY_SECRET=<mtproxy-secret>
 ```
 
-В UI можно быстро добавить важный топик без редеплоя. Это удобно для проверки, но после перезапуска монитора такой топик нужно будет добавить снова или перенести в `.env`.
+MTProxy работает по MTProto, поэтому кроме токена бота нужны `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. Бот должен состоять в целевом канале и иметь право публиковать сообщения.
 
-## Matrix
+Ссылка MTProxy раскладывается по переменным так:
 
-Чтобы включить алерты:
-
-```env
-MATRIX_ENABLED=true
-MATRIX_ROOM_ID=!room-id:matrix.greact.online
-MATRIX_ACCESS_TOKEN=<access-token>
+```text
+tg://proxy?server=<TELEGRAM_PROXY_HOST>&port=<TELEGRAM_PROXY_PORT>&secret=<TELEGRAM_PROXY_SECRET>
 ```
 
-Сообщения отправляются в формате обычного `m.text`.
-
-## Production build
+После заполнения `.env` отправьте одно реальное тестовое сообщение:
 
 ```bash
+npm run test:telegram
+```
+
+Успешная команда выведет ID чата. Значения токена, `api_hash` и proxy secret приложение не печатает.
+
+## Read-only ACL
+
+Окончательно запретите запись на стороне брокера отдельной учётной записью:
+
+```conf
+user mqtt-monitor
+topic read #
+```
+
+Приложение не подписывается на `$SYS/#`: доступность определяется MQTT-соединением, а поток данных — реальными публикациями в прикладных топиках.
+
+## Проверка и production
+
+```bash
+npm test
 npm run build
 npm start
 ```
 
-После `npm start` backend отдает только API. Для production UI нужно раздавать `dist` через nginx/static hosting или добавить отдельную раздачу статики, если это потребуется.
+API состоит из трёх read-only endpoint: `/api/health`, `/api/snapshot` и SSE `/api/events`. Production-сервер также раздаёт собранный интерфейс из `dist`.

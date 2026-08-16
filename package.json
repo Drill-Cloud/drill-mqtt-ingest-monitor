@@ -5,26 +5,27 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "tsx watch --env-file=.env server/index.ts",
     "dev:web": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.server.json && tsc -b && vite build",
-    "start": "node dist-server/index.js"
+    "test": "tsx --test tests/*.test.ts",
+    "test:telegram": "tsx --env-file=.env server/test-telegram.ts",
+    "start": "node dist-server/server/index.js"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.0.0",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
     "mqtt": "^5.10.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "teleproto": "^1.228.5"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
