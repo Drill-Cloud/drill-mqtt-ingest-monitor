@@ -34,6 +34,7 @@ export class TelegramNotifier implements Notifier {
     return this.request('sendMessage', {
       chat_id: this.config.chatId,
       text: message,
+      parse_mode: 'HTML',
     });
   }
 
