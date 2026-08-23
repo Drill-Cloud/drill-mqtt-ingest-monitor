@@ -5,6 +5,7 @@ export type TelegramConfig = {
   socksPort: number;
   socksUsername: string;
   socksPassword: string;
+  alertIntervalMs: number;
 };
 
 export type AppConfig = {
@@ -17,6 +18,7 @@ export type AppConfig = {
   importantTopics: string[];
   importantCameras: string[];
   silenceMs: number;
+  timeZone: string;
   telegram: TelegramConfig | null;
 };
 
@@ -53,6 +55,7 @@ export function readTelegramConfig(): TelegramConfig | null {
     socksPort: positiveNumber('TELEGRAM_SOCKS_PORT'),
     socksUsername: required('TELEGRAM_SOCKS_USERNAME'),
     socksPassword: required('TELEGRAM_SOCKS_PASSWORD'),
+    alertIntervalMs: positiveNumber('TELEGRAM_ALERT_INTERVAL_MS', 60_000),
   };
 }
 
@@ -67,6 +70,7 @@ export function readConfig(): AppConfig {
     importantTopics: list('IMPORTANT_TOPICS'),
     importantCameras: list('IMPORTANT_CAMERAS'),
     silenceMs: positiveNumber('TOPIC_SILENCE_MS', 45_000),
+    timeZone: process.env.TZ?.trim() || 'Europe/Moscow',
     telegram: readTelegramConfig(),
   };
 }
