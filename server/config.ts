@@ -1,11 +1,11 @@
 export type TelegramConfig = {
-  apiId: number;
-  apiHash: string;
   botToken: string;
   chatId: string;
-  proxyHost: string;
-  proxyPort: number;
-  proxySecret: string;
+  socksHost: string;
+  socksPort: number;
+  socksUsername: string;
+  socksPassword: string;
+  alertIntervalMs: number;
 };
 
 export type AppConfig = {
@@ -18,6 +18,7 @@ export type AppConfig = {
   importantTopics: string[];
   importantCameras: string[];
   silenceMs: number;
+  timeZone: string;
   telegram: TelegramConfig | null;
 };
 
@@ -44,17 +45,17 @@ function list(name: string, fallback: string[] = []): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function readTelegramConfig(): TelegramConfig | null {
+export function readTelegramConfig(): TelegramConfig | null {
   if (process.env.TELEGRAM_ENABLED !== 'true') return null;
 
   return {
-    apiId: positiveNumber('TELEGRAM_API_ID'),
-    apiHash: required('TELEGRAM_API_HASH'),
     botToken: required('TELEGRAM_BOT_TOKEN'),
     chatId: required('TELEGRAM_CHAT_ID'),
-    proxyHost: required('TELEGRAM_PROXY_HOST'),
-    proxyPort: positiveNumber('TELEGRAM_PROXY_PORT'),
-    proxySecret: required('TELEGRAM_PROXY_SECRET'),
+    socksHost: required('TELEGRAM_SOCKS_HOST'),
+    socksPort: positiveNumber('TELEGRAM_SOCKS_PORT'),
+    socksUsername: required('TELEGRAM_SOCKS_USERNAME'),
+    socksPassword: required('TELEGRAM_SOCKS_PASSWORD'),
+    alertIntervalMs: positiveNumber('TELEGRAM_ALERT_INTERVAL_MS', 60_000),
   };
 }
 
@@ -69,6 +70,7 @@ export function readConfig(): AppConfig {
     importantTopics: list('IMPORTANT_TOPICS'),
     importantCameras: list('IMPORTANT_CAMERAS'),
     silenceMs: positiveNumber('TOPIC_SILENCE_MS', 45_000),
+    timeZone: process.env.TZ?.trim() || 'Europe/Moscow',
     telegram: readTelegramConfig(),
   };
 }

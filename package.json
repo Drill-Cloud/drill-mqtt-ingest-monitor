@@ -9,6 +9,7 @@
     "dev:web": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.server.json && tsc -b && vite build",
     "test": "tsx --test tests/*.test.ts",
+    "test:telegram": "tsx --env-file=.env server/test-telegram.ts",
     "start": "node dist-server/server/index.js"
   },
   "dependencies": {
@@ -17,7 +18,7 @@
     "mqtt": "^5.10.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "teleproto": "^1.228.5"
+    "socks-proxy-agent": "^8.0.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

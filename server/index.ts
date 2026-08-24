@@ -11,7 +11,7 @@ const config = readConfig();
 const app = express();
 const monitor = new MqttMonitor(config);
 const telegram = config.telegram ? new TelegramNotifier(config.telegram) : null;
-const alerts = new AlertService(telegram);
+const alerts = new AlertService(telegram, config.telegram?.alertIntervalMs, config.timeZone);
 const eventClients = new Set<express.Response>();
 const staticDir = path.resolve(process.cwd(), 'dist');
 let shuttingDown = false;
@@ -61,6 +61,7 @@ const server = app.listen(config.httpPort, () => {
 async function shutdown(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  alerts.stop();
   monitor.stop();
   for (const client of eventClients) client.end();
   await telegram?.disconnect();
