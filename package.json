@@ -10,7 +10,10 @@
     "build": "tsc -p tsconfig.server.json && tsc -b && vite build",
     "test": "tsx --test tests/*.test.ts",
     "test:telegram": "tsx --env-file=.env server/test-telegram.ts",
-    "start": "node dist-server/server/index.js"
+    "start": "node dist-server/server/index.js",
+    "docs:init": "git submodule update --init --recursive docs/shared",
+    "docs:update": "git submodule update --remote --recursive docs/shared",
+    "docs:status": "git submodule status docs/shared"
   },
   "dependencies": {
     "express": "^5.1.0",

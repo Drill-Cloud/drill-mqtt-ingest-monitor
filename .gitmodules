@@ -1,0 +1,4 @@
+[submodule "docs/shared"]
+	path = docs/shared
+	url = https://github.com/Drill-Cloud/drill-cloud-docs.git
+	branch = main
