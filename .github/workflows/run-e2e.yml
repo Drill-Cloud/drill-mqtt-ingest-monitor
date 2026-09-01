@@ -1,0 +1,94 @@
+name: Run Drill Cloud E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - alpha
+          - main
+      profile:
+        description: Test profile
+        required: true
+        default: p0
+        type: choice
+        options:
+          - p0
+          - p1
+          - p2
+          - nightly
+          - all
+      browser:
+        description: Browser
+        required: true
+        default: chromium
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Request E2E run
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Start central E2E workflow
+        shell: bash
+        env:
+          E2E_WORKFLOW_TOKEN: ${{ secrets.E2E_WORKFLOW_TOKEN }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          TEST_PROFILE: ${{ inputs.profile }}
+          TEST_BROWSER: ${{ inputs.browser }}
+        run: |
+          if [[ -z "$E2E_WORKFLOW_TOKEN" ]]; then
+            echo "E2E_WORKFLOW_TOKEN is not configured"
+            exit 1
+          fi
+
+          jq -n \
+            --arg environment "$TARGET_ENVIRONMENT" \
+            --arg profile "$TEST_PROFILE" \
+            --arg browser "$TEST_BROWSER" \
+            '{
+              ref: "dev",
+              inputs: {
+                environment: $environment,
+                profile: $profile,
+                browser: $browser
+              }
+            }' |
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $E2E_WORKFLOW_TOKEN" \
+            --header "X-GitHub-Api-Version: 2026-03-10" \
+            --data-binary @- \
+            "https://api.github.com/repos/Drill-Cloud/drill-cloud-test/actions/workflows/e2e.yml/dispatches"
+
+      - name: Add target workflow link
+        shell: bash
+        run: |
+          {
+            echo "## E2E run requested"
+            echo "- Source repository: $GITHUB_REPOSITORY"
+            echo "- Source commit: $GITHUB_SHA"
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Profile: ${{ inputs.profile }}"
+            echo "- Browser: ${{ inputs.browser }}"
+            echo
+            echo "[Open Drill Cloud E2E runs](https://github.com/Drill-Cloud/drill-cloud-test/actions/workflows/e2e.yml)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
